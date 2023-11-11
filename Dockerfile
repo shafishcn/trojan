@@ -1,5 +1,6 @@
 FROM alpine:3.11
 
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
 COPY . trojan
 RUN apk add --no-cache --virtual .build-deps \
         build-base \
@@ -15,7 +16,13 @@ RUN apk add --no-cache --virtual .build-deps \
         libstdc++ \
         boost-system \
         boost-program_options \
-        mariadb-connector-c
+        mariadb-connector-c \
+    && apk add --no-cache privoxy jq
 
 WORKDIR /config
-CMD ["trojan", "config.json"]
+
+ADD config.json .
+ADD entry.sh .
+ADD privoxy.config /etc/privoxy/config
+
+CMD ["/config/entry.sh"]
