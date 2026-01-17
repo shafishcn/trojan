@@ -83,7 +83,7 @@ func UpTime() string {
 	return ""
 }
 
-// ChangePort 修改trojan端口
+// ChangePort 修改trojan端口(交互模式)
 func ChangePort() {
 	config := core.GetConfig()
 	oldPort := config.LocalPort
@@ -100,7 +100,22 @@ func ChangePort() {
 		fmt.Println(util.Green("端口修改成功!"))
 		Restart()
 	} else {
-		fmt.Println(util.Red("端口修改成功!"))
+		fmt.Println(util.Red("端口修改失败!"))
+	}
+}
+
+// ChangePortByNum 直接通过端口号修改trojan端口
+func ChangePortByNum(newPort int) {
+	config := core.GetConfig()
+	oldPort := config.LocalPort
+	fmt.Println("当前trojan端口: " + util.Green(strconv.Itoa(oldPort)))
+	fmt.Println("新的trojan端口: " + util.Green(strconv.Itoa(newPort)))
+	if core.WritePort(newPort) {
+		util.OpenPort(newPort)
+		fmt.Println(util.Green("端口修改成功!"))
+		Restart()
+	} else {
+		fmt.Println(util.Red("端口修改失败!"))
 	}
 }
 
