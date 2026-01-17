@@ -98,3 +98,5 @@ Flags:
 ## Thanks
 感谢JetBrains提供的免费GoLand  
 [![avatar](asset/jetbrains.svg)](https://jb.gg/OpenSource)
+
+gh release create v2.9.8.4 --title "Trojan v2.9.8.4" --notes "Release v2.9.8.4
