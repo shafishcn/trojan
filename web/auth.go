@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
+	"net/http"
 	"time"
 	"trojan/core"
 	"trojan/util"
@@ -105,16 +106,57 @@ func jwtInit(timeout int) {
 	}
 }
 
-func updateUser(c *gin.Context) {
+func adminPasswordExists() bool {
+	password, err := core.GetValue("admin_pass")
+	return err == nil && password != ""
+}
+
+func writeAdminPassword(pass string) error {
+	return core.SetValue("admin_pass", pass)
+}
+
+func registerAdmin(c *gin.Context) {
 	responseBody := controller.ResponseBody{Msg: "success"}
 	defer controller.TimeCost(time.Now(), &responseBody)
-	username := c.DefaultPostForm("username", "admin")
 	pass := c.PostForm("password")
-	err := core.SetValue(fmt.Sprintf("%s_pass", username), pass)
-	if err != nil {
-		responseBody.Msg = err.Error()
+	if adminPasswordExists() {
+		responseBody.Msg = "管理员账号已初始化"
+		c.JSON(http.StatusForbidden, responseBody)
+		return
 	}
-	c.JSON(200, responseBody)
+	if pass == "" {
+		responseBody.Msg = "password is required"
+		c.JSON(http.StatusBadRequest, responseBody)
+		return
+	}
+	if err := writeAdminPassword(pass); err != nil {
+		responseBody.Msg = err.Error()
+		c.JSON(http.StatusInternalServerError, responseBody)
+		return
+	}
+	c.JSON(http.StatusOK, responseBody)
+}
+
+func updateAdminPassword(c *gin.Context) {
+	responseBody := controller.ResponseBody{Msg: "success"}
+	defer controller.TimeCost(time.Now(), &responseBody)
+	if RequestUsername(c) != "admin" {
+		responseBody.Msg = "只有admin可以重置管理员密码"
+		c.JSON(http.StatusForbidden, responseBody)
+		return
+	}
+	pass := c.PostForm("password")
+	if pass == "" {
+		responseBody.Msg = "password is required"
+		c.JSON(http.StatusBadRequest, responseBody)
+		return
+	}
+	if err := writeAdminPassword(pass); err != nil {
+		responseBody.Msg = err.Error()
+		c.JSON(http.StatusInternalServerError, responseBody)
+		return
+	}
+	c.JSON(http.StatusOK, responseBody)
 }
 
 // RequestUsername 获取请求接口的用户名
@@ -152,7 +194,7 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 		}
 	})
 	r.POST("/auth/login", authMiddleware.LoginHandler)
-	r.POST("/auth/register", updateUser)
+	r.POST("/auth/register", registerAdmin)
 	authO := r.Group("/auth")
 	authO.Use(authMiddleware.MiddlewareFunc())
 	{
@@ -170,7 +212,7 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 				})
 			}
 		})
-		authO.POST("/reset_pass", updateUser)
+		authO.POST("/reset_pass", updateAdminPassword)
 		authO.POST("/logout", authMiddleware.LogoutHandler)
 		authO.POST("/refresh_token", authMiddleware.RefreshHandler)
 	}

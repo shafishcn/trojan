@@ -2,13 +2,20 @@ package core
 
 import (
 	"github.com/syndtr/goleveldb/leveldb"
+	"os"
 )
 
-var dbPath = "/var/lib/trojan-manager"
+func dbPath() string {
+	path := os.Getenv("TROJAN_MANAGER_DB_PATH")
+	if path != "" {
+		return path
+	}
+	return "/var/lib/trojan-manager"
+}
 
 // GetValue 获取leveldb值
 func GetValue(key string) (string, error) {
-	db, err := leveldb.OpenFile(dbPath, nil)
+	db, err := leveldb.OpenFile(dbPath(), nil)
 	if err != nil {
 		return "", err
 	}
@@ -22,7 +29,7 @@ func GetValue(key string) (string, error) {
 
 // SetValue 设置leveldb值
 func SetValue(key string, value string) error {
-	db, err := leveldb.OpenFile(dbPath, nil)
+	db, err := leveldb.OpenFile(dbPath(), nil)
 	if err != nil {
 		return err
 	}
@@ -32,7 +39,7 @@ func SetValue(key string, value string) error {
 
 // DelValue 删除值
 func DelValue(key string) error {
-	db, err := leveldb.OpenFile(dbPath, nil)
+	db, err := leveldb.OpenFile(dbPath(), nil)
 	if err != nil {
 		return err
 	}

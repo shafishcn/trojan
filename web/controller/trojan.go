@@ -84,12 +84,8 @@ func Log(c *gin.Context) {
 		fmt.Println("invalid param: " + param)
 		return
 	}
-	if param == "-1" {
-		param = "--no-tail"
-	} else {
-		param = "-n " + param
-	}
-	result, err := util.LogChan("trojan", param, wsConn.CloseChan)
+	line, _ := strconv.Atoi(param)
+	result, err := util.LogChan("trojan", line, wsConn.CloseChan)
 	if err != nil {
 		fmt.Println(err)
 		return

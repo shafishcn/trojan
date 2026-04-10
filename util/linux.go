@@ -88,15 +88,23 @@ func OpenPort(port int) {
 
 // Log 实时打印指定服务日志
 func Log(serviceName string, line int) {
-	result, _ := LogChan(serviceName, "-n "+strconv.Itoa(line), make(chan byte))
+	result, _ := LogChan(serviceName, line, make(chan byte))
 	for line := range result {
 		fmt.Println(line)
 	}
 }
 
+func journalctlArgs(serviceName string, line int) []string {
+	args := []string{"-f", "-u", serviceName, "-o", "cat"}
+	if line < 0 {
+		return append(args, "--no-tail")
+	}
+	return append(args, "-n", strconv.Itoa(line))
+}
+
 // LogChan 指定服务实时日志, 返回chan
-func LogChan(serviceName, param string, closeChan chan byte) (chan string, error) {
-	cmd := exec.Command("bash", "-c", fmt.Sprintf("journalctl -f -u %s -o cat %s", serviceName, param))
+func LogChan(serviceName string, line int, closeChan chan byte) (chan string, error) {
+	cmd := exec.Command("journalctl", journalctlArgs(serviceName, line)...)
 
 	stdout, _ := cmd.StdoutPipe()
 
