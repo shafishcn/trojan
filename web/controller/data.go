@@ -56,7 +56,7 @@ func GetResetDay() *ResponseBody {
 func UpdateResetDay(day uint) *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
-	if day > 31 || day < 0 {
+	if day > 31 {
 		responseBody.Msg = fmt.Sprintf("%d为非正常日期", day)
 		return &responseBody
 	}

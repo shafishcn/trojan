@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,8 +28,7 @@ func PortIsUse(port int) bool {
 // RandomPort 获取没占用的随机端口
 func RandomPort() int {
 	for {
-		rand.New(rand.NewSource(time.Now().UnixNano()))
-		newPort := rand.Intn(65536)
+		newPort := rand.Intn(65536-1024) + 1024
 		if !PortIsUse(newPort) {
 			return newPort
 		}
@@ -51,11 +51,14 @@ func IsExists(path string) bool {
 func GetLocalIP() string {
 	resp, err := http.Get("http://api.ipify.org")
 	if err != nil {
-		resp, _ = http.Get("http://icanhazip.com")
+		resp, err = http.Get("http://icanhazip.com")
+		if err != nil {
+			return ""
+		}
 	}
 	defer resp.Body.Close()
 	s, _ := io.ReadAll(resp.Body)
-	return string(s)
+	return strings.TrimSpace(string(s))
 }
 
 // InstallPack 安装指定名字软件
@@ -115,6 +118,8 @@ func LogChan(serviceName string, line int, closeChan chan byte) (chan string, er
 	ch := make(chan string, 100)
 	stdoutScan := bufio.NewScanner(stdout)
 	go func() {
+		defer close(ch)
+		defer cmd.Wait()
 		for stdoutScan.Scan() {
 			select {
 			case <-closeChan:

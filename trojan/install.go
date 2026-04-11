@@ -176,7 +176,6 @@ func InstallMysql() {
 			fmt.Printf("%s mariadb启动中,请稍等...\n", time.Now().Format("2006-01-02 15:04:05"))
 			err := db.Ping()
 			if err == nil {
-				db.Close()
 				break
 			} else {
 				time.Sleep(2 * time.Second)

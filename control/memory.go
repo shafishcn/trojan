@@ -670,13 +670,15 @@ func (s *MemoryStore) PendingTasks(nodeKey string, limit int) ([]Task, error) {
 	}
 
 	allTasks := s.tasks[nodeKey]
-	if len(allTasks) < limit {
-		limit = len(allTasks)
-	}
-
 	result := make([]Task, 0, limit)
-	for _, task := range allTasks[:limit] {
+	for _, task := range allTasks {
+		if task.Status != "pending" {
+			continue
+		}
 		result = append(result, cloneTask(task))
+		if len(result) >= limit {
+			break
+		}
 	}
 	return result, nil
 }

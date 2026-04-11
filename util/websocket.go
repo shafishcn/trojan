@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"strings"
 	"sync"
 )
 
 // http升级websocket协议的配置
 var wsUpgrader = websocket.Upgrader{
-	// 允许所有CORS跨域请求
+	// 校验来源是否与请求Host一致
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		return strings.Contains(origin, r.Host)
 	},
 }
 

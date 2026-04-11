@@ -17,8 +17,10 @@ func (mysql *Mysql) UpgradeDB() error {
 	if db == nil {
 		return errors.New("can't connect mysql")
 	}
-	var field string
-	err := db.QueryRow("SHOW COLUMNS FROM users LIKE 'passwordShow';").Scan(&field)
+	// SHOW COLUMNS 返回多列，只取第一列 Field
+	var field, colType, colNull, colKey sql.NullString
+	var colDefault, colExtra sql.NullString
+	err := db.QueryRow("SHOW COLUMNS FROM users LIKE 'passwordShow'").Scan(&field, &colType, &colNull, &colKey, &colDefault, &colExtra)
 	if err == sql.ErrNoRows {
 		fmt.Println(util.Yellow("正在进行数据库升级, 请稍等.."))
 		if _, err := db.Exec("ALTER TABLE users ADD COLUMN passwordShow VARCHAR(255) NOT NULL AFTER password;"); err != nil {
@@ -34,7 +36,7 @@ func (mysql *Mysql) UpgradeDB() error {
 			pass, _ := GetValue(fmt.Sprintf("%s_pass", user.Username))
 			if pass != "" {
 				base64Pass := base64.StdEncoding.EncodeToString([]byte(pass))
-				if _, err := db.Exec(fmt.Sprintf("UPDATE users SET passwordShow='%s' WHERE id=%d;", base64Pass, user.ID)); err != nil {
+				if _, err := db.Exec("UPDATE users SET passwordShow=? WHERE id=?", base64Pass, user.ID); err != nil {
 					fmt.Println(err)
 					return err
 				}
@@ -42,7 +44,7 @@ func (mysql *Mysql) UpgradeDB() error {
 			}
 		}
 	}
-	err = db.QueryRow("SHOW COLUMNS FROM users LIKE 'useDays';").Scan(&field)
+	err = db.QueryRow("SHOW COLUMNS FROM users LIKE 'useDays'").Scan(&field, &colType, &colNull, &colKey, &colDefault, &colExtra)
 	if err == sql.ErrNoRows {
 		fmt.Println(util.Yellow("正在进行数据库升级, 请稍等.."))
 		if _, err := db.Exec(`
@@ -54,10 +56,9 @@ ADD COLUMN expiryDate char(10) DEFAULT '';
 			return err
 		}
 	}
-	var tableName string
-	err = db.QueryRow(fmt.Sprintf(
-		"SELECT * FROM information_schema.TABLES WHERE TABLE_NAME = 'users' AND TABLE_SCHEMA = '%s' ",
-		mysql.Database) + " AND TABLE_COLLATION LIKE 'utf8%';").Scan(&tableName)
+	var tableName sql.NullString
+	err = db.QueryRow("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_NAME = 'users' AND TABLE_SCHEMA = ? AND TABLE_COLLATION LIKE 'utf8%'",
+		mysql.Database).Scan(&tableName)
 	if err == sql.ErrNoRows {
 		tempFile := "temp.sql"
 		mysql.DumpSql(tempFile)
@@ -78,7 +79,10 @@ func (mysql *Mysql) DumpSql(filePath string) error {
 	writer.WriteString("DROP TABLE IF EXISTS users;")
 	writer.WriteString(CreateTableSql)
 	db := mysql.GetDB()
-	userList, err := queryUserList(db, "SELECT * FROM users;")
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
+	userList, err := queryUserListParams(db, "SELECT * FROM users")
 	if err != nil {
 		return err
 	}
@@ -95,6 +99,9 @@ INSERT INTO users(username, password, passwordShow, quota, download, upload, use
 // ExecSql 执行sql
 func (mysql *Mysql) ExecSql(filePath string) error {
 	db := mysql.GetDB()
+	if db == nil {
+		return errors.New("can't connect mysql")
+	}
 	fileByte, err := os.ReadFile(filePath)
 	if err != nil {
 		return err

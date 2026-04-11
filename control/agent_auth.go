@@ -90,8 +90,6 @@ func agentAuthMiddleware(store Store, globalToken string) gin.HandlerFunc {
 					c.Abort()
 					return
 				}
-				secret := c.GetHeader("X-Debug-Agent-Secret")
-				_ = secret
 				if !verifyAgentSignature(c.Request.Method, c.Request.URL.RequestURI(), nodeKey, timestamp, body, credential.SecretHash, signature) {
 					respond(c, http.StatusUnauthorized, "invalid agent signature", nil)
 					c.Abort()

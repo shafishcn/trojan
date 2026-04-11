@@ -1,6 +1,7 @@
 package control
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"io"
@@ -943,7 +944,7 @@ func bearerAuthMiddleware(expectedToken string) gin.HandlerFunc {
 			return
 		}
 		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token != expectedToken {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) != 1 {
 			respond(c, http.StatusUnauthorized, "invalid bearer token", nil)
 			c.Abort()
 			return
@@ -964,7 +965,7 @@ func metricsAuthMiddleware(expectedToken string) gin.HandlerFunc {
 			return
 		}
 		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		if token != expectedToken {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) != 1 {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}

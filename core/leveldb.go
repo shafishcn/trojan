@@ -1,8 +1,16 @@
 package core
 
 import (
-	"github.com/syndtr/goleveldb/leveldb"
 	"os"
+	"sync"
+
+	"github.com/syndtr/goleveldb/leveldb"
+)
+
+var (
+	dbInstance *leveldb.DB
+	dbOnce     sync.Once
+	dbErr      error
 )
 
 func dbPath() string {
@@ -13,13 +21,20 @@ func dbPath() string {
 	return "/var/lib/trojan-manager"
 }
 
+// getDB 获取全局LevelDB实例(单例)
+func getDB() (*leveldb.DB, error) {
+	dbOnce.Do(func() {
+		dbInstance, dbErr = leveldb.OpenFile(dbPath(), nil)
+	})
+	return dbInstance, dbErr
+}
+
 // GetValue 获取leveldb值
 func GetValue(key string) (string, error) {
-	db, err := leveldb.OpenFile(dbPath(), nil)
+	db, err := getDB()
 	if err != nil {
 		return "", err
 	}
-	defer db.Close()
 	result, err := db.Get([]byte(key), nil)
 	if err != nil {
 		return "", err
@@ -29,20 +44,18 @@ func GetValue(key string) (string, error) {
 
 // SetValue 设置leveldb值
 func SetValue(key string, value string) error {
-	db, err := leveldb.OpenFile(dbPath(), nil)
+	db, err := getDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 	return db.Put([]byte(key), []byte(value), nil)
 }
 
 // DelValue 删除值
 func DelValue(key string) error {
-	db, err := leveldb.OpenFile(dbPath(), nil)
+	db, err := getDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 	return db.Delete([]byte(key), nil)
 }

@@ -124,17 +124,21 @@ func ImportCsv(c *gin.Context) *ResponseBody {
 			responseBody.Msg = readErr.Error()
 			return &responseBody
 		}
-		quota, _ := strconv.Atoi(line[4])
-		download, _ := strconv.Atoi(line[5])
-		upload, _ := strconv.Atoi(line[6])
+		if len(line) < 9 {
+			responseBody.Msg = fmt.Sprintf("CSV格式错误: 期望至少9列, 实际%d列", len(line))
+			return &responseBody
+		}
+		quota, _ := strconv.ParseInt(line[4], 10, 64)
+		download, _ := strconv.ParseUint(line[5], 10, 64)
+		upload, _ := strconv.ParseUint(line[6], 10, 64)
 		useDays, _ := strconv.Atoi(line[7])
 		userList = append(userList, &core.User{
 			Username:    line[1],
 			Password:    line[2],
 			EncryptPass: line[3],
-			Quota:       int64(quota),
-			Download:    uint64(download),
-			Upload:      uint64(upload),
+			Quota:       quota,
+			Download:    download,
+			Upload:      upload,
 			UseDays:     uint(useDays),
 			ExpiryDate:  line[8],
 		})
@@ -150,9 +154,9 @@ func ImportCsv(c *gin.Context) *ResponseBody {
 		return &responseBody
 	}
 	for _, user := range userList {
-		if _, err = db.Exec(fmt.Sprintf(`
-INSERT INTO users(username, password, passwordShow, quota, download, upload, useDays, expiryDate) VALUES ('%s','%s','%s', %d, %d, %d, %d, '%s');`,
-			user.Username, user.EncryptPass, user.Password, user.Quota, user.Download, user.Upload, user.UseDays, user.ExpiryDate)); err != nil {
+		if _, err = db.Exec(
+			"INSERT INTO users(username, password, passwordShow, quota, download, upload, useDays, expiryDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			user.Username, user.EncryptPass, user.Password, user.Quota, user.Download, user.Upload, user.UseDays, user.ExpiryDate); err != nil {
 			responseBody.Msg = err.Error()
 			return &responseBody
 		}
@@ -176,14 +180,14 @@ func ExportCsv(c *gin.Context) *ResponseBody {
 	wr := csv.NewWriter(dataBytes)
 	for _, user := range userList {
 		singleUser := []string{
-			strconv.Itoa(int(user.ID)),
+			strconv.FormatUint(uint64(user.ID), 10),
 			user.Username,
 			user.Password,
 			user.EncryptPass,
-			strconv.Itoa(int(user.Quota)),
-			strconv.Itoa(int(user.Download)),
-			strconv.Itoa(int(user.Upload)),
-			strconv.Itoa(int(user.UseDays)),
+			strconv.FormatInt(user.Quota, 10),
+			strconv.FormatUint(user.Download, 10),
+			strconv.FormatUint(user.Upload, 10),
+			strconv.FormatUint(uint64(user.UseDays), 10),
 			user.ExpiryDate,
 		}
 		wr.Write(singleUser)
@@ -194,3 +198,4 @@ func ExportCsv(c *gin.Context) *ResponseBody {
 	c.String(200, dataBytes.String())
 	return nil
 }
+

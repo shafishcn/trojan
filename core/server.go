@@ -53,7 +53,7 @@ func Save(data []byte, path string) bool {
 	if path == "" {
 		path = configPath
 	}
-	if err := os.WriteFile(path, pretty.Pretty(data), 0644); err != nil {
+	if err := os.WriteFile(path, pretty.Pretty(data), 0600); err != nil {
 		fmt.Println(err)
 		return false
 	}

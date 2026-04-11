@@ -61,6 +61,7 @@ func Bytefmt(bytes uint64) string {
 	}
 
 	result := strconv.FormatFloat(value, 'f', 2, 64)
-	result = strings.TrimSuffix(result, ".0")
+	result = strings.TrimRight(result, "0")
+	result = strings.TrimRight(result, ".")
 	return result + unit
 }

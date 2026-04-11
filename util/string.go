@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
-	"time"
 )
 
 const (
@@ -47,7 +46,6 @@ func IsInteger(input string) bool {
 func RandString(length int, source string) string {
 	var runes = []rune(source)
 	b := make([]rune, length)
-	rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range b {
 		b[i] = runes[rand.Intn(len(runes))]
 	}

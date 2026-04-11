@@ -90,11 +90,13 @@ func RunWebShell(webShellPath string) {
 	resp, err := http.Get(webShellPath)
 	if err != nil {
 		fmt.Println(err.Error())
+		return
 	}
 	defer resp.Body.Close()
 	installShell, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err.Error())
+		return
 	}
 	ExecCommand(string(installShell))
 }
@@ -111,6 +113,7 @@ func ExecCommand(command string) error {
 		return err
 	}
 	ch := make(chan string, 100)
+	errCh := make(chan error, 1)
 	stdoutScan := bufio.NewScanner(stdout)
 	stderrScan := bufio.NewScanner(stderr)
 	go func() {
@@ -125,18 +128,18 @@ func ExecCommand(command string) error {
 			ch <- line
 		}
 	}()
-	var err error
 	go func() {
-		err = cmd.Wait()
+		err := cmd.Wait()
 		if err != nil && !strings.Contains(err.Error(), "exit status") {
 			fmt.Println("wait:", err.Error())
 		}
 		close(ch)
+		errCh <- err
 	}()
 	for line := range ch {
 		fmt.Println(line)
 	}
-	return err
+	return <-errCh
 }
 
 // ExecCommandWithResult 运行命令并获取结果

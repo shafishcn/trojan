@@ -26,8 +26,16 @@ func userRouter(router *gin.Engine) {
 		user.GET("/page", func(c *gin.Context) {
 			curPageStr := c.DefaultQuery("curPage", "1")
 			pageSizeStr := c.DefaultQuery("pageSize", "10")
-			curPage, _ := strconv.Atoi(curPageStr)
-			pageSize, _ := strconv.Atoi(pageSizeStr)
+			curPage, err := strconv.Atoi(curPageStr)
+			if err != nil || curPage < 1 {
+				c.JSON(400, controller.ResponseBody{Msg: "curPage参数无效"})
+				return
+			}
+			pageSize, err := strconv.Atoi(pageSizeStr)
+			if err != nil || pageSize < 1 {
+				c.JSON(400, controller.ResponseBody{Msg: "pageSize参数无效"})
+				return
+			}
 			c.JSON(200, controller.PageUserList(curPage, pageSize))
 		})
 		user.POST("", func(c *gin.Context) {
@@ -39,24 +47,44 @@ func userRouter(router *gin.Engine) {
 			sid := c.PostForm("id")
 			username := c.PostForm("username")
 			password := c.PostForm("password")
-			id, _ := strconv.Atoi(sid)
+			id, err := strconv.Atoi(sid)
+			if err != nil || id <= 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "id参数无效"})
+				return
+			}
 			c.JSON(200, controller.UpdateUser(uint(id), username, password))
 		})
 		user.POST("/expire", func(c *gin.Context) {
 			sid := c.PostForm("id")
 			sDays := c.PostForm("useDays")
-			id, _ := strconv.Atoi(sid)
-			useDays, _ := strconv.Atoi(sDays)
+			id, err := strconv.Atoi(sid)
+			if err != nil || id <= 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "id参数无效"})
+				return
+			}
+			useDays, err := strconv.Atoi(sDays)
+			if err != nil || useDays < 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "useDays参数无效"})
+				return
+			}
 			c.JSON(200, controller.SetExpire(uint(id), uint(useDays)))
 		})
 		user.DELETE("/expire", func(c *gin.Context) {
 			sid := c.Query("id")
-			id, _ := strconv.Atoi(sid)
+			id, err := strconv.Atoi(sid)
+			if err != nil || id <= 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "id参数无效"})
+				return
+			}
 			c.JSON(200, controller.CancelExpire(uint(id)))
 		})
 		user.DELETE("", func(c *gin.Context) {
 			stringId := c.Query("id")
-			id, _ := strconv.Atoi(stringId)
+			id, err := strconv.Atoi(stringId)
+			if err != nil || id <= 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "id参数无效"})
+				return
+			}
 			c.JSON(200, controller.DelUser(uint(id)))
 		})
 	}
@@ -93,7 +121,11 @@ func trojanRouter(router *gin.Engine) {
 	})
 	router.POST("/trojan/loglevel", func(c *gin.Context) {
 		slevel := c.DefaultPostForm("level", "1")
-		level, _ := strconv.Atoi(slevel)
+		level, err := strconv.Atoi(slevel)
+		if err != nil {
+			c.JSON(400, controller.ResponseBody{Msg: "level参数无效"})
+			return
+		}
 		c.JSON(200, controller.SetLogLevel(level))
 	})
 	router.POST("/trojan/domain", func(c *gin.Context) {
@@ -110,18 +142,34 @@ func dataRouter(router *gin.Engine) {
 		data.POST("", func(c *gin.Context) {
 			sID := c.PostForm("id")
 			sQuota := c.PostForm("quota")
-			id, _ := strconv.Atoi(sID)
-			quota, _ := strconv.Atoi(sQuota)
+			id, err := strconv.Atoi(sID)
+			if err != nil || id <= 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "id参数无效"})
+				return
+			}
+			quota, err := strconv.Atoi(sQuota)
+			if err != nil {
+				c.JSON(400, controller.ResponseBody{Msg: "quota参数无效"})
+				return
+			}
 			c.JSON(200, controller.SetData(uint(id), quota))
 		})
 		data.DELETE("", func(c *gin.Context) {
 			sID := c.Query("id")
-			id, _ := strconv.Atoi(sID)
+			id, err := strconv.Atoi(sID)
+			if err != nil || id <= 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "id参数无效"})
+				return
+			}
 			c.JSON(200, controller.CleanData(uint(id)))
 		})
 		data.POST("/resetDay", func(c *gin.Context) {
 			dayStr := c.DefaultPostForm("day", "1")
-			day, _ := strconv.Atoi(dayStr)
+			day, err := strconv.Atoi(dayStr)
+			if err != nil || day < 0 {
+				c.JSON(400, controller.ResponseBody{Msg: "day参数无效"})
+				return
+			}
 			c.JSON(200, controller.UpdateResetDay(uint(day)))
 		})
 		data.GET("/resetDay", func(c *gin.Context) {

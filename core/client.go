@@ -42,7 +42,7 @@ func WriteClient(port int, password, domain, writePath string) bool {
 		fmt.Println(err)
 		return false
 	}
-	if err = os.WriteFile(writePath, outData, 0644); err != nil {
+	if err = os.WriteFile(writePath, outData, 0600); err != nil {
 		fmt.Println(err)
 		return false
 	}
