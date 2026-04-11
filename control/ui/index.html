@@ -1,0 +1,1184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Trojan Control Center</title>
+  <style>
+    :root {
+      --bg: #f6f2e9;
+      --panel: rgba(255, 252, 245, 0.92);
+      --ink: #1f1a17;
+      --muted: #756a61;
+      --line: rgba(80, 55, 34, 0.15);
+      --accent: #b54d24;
+      --accent-2: #2f6c64;
+      --warning: #8b2e24;
+      --shadow: 0 18px 40px rgba(58, 37, 20, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(181, 77, 36, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(47, 108, 100, 0.16), transparent 24%),
+        linear-gradient(180deg, #fbf7f0 0%, var(--bg) 100%);
+      min-height: 100vh;
+    }
+
+    .shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-card {
+      padding: 24px;
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 5vw, 56px);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 54ch;
+    }
+
+    .token-card {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .token-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1.1fr 0.9fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .section {
+      padding: 20px;
+    }
+
+    .section h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid var(--line);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.88);
+      padding: 12px 14px;
+      color: var(--ink);
+      font-size: 14px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: "SFMono-Regular", "Menlo", monospace;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: white;
+      background: var(--accent);
+      transition: transform 120ms ease, opacity 120ms ease;
+    }
+
+    button.secondary {
+      background: var(--accent-2);
+    }
+
+    button.ghost {
+      background: rgba(31,26,23,0.08);
+      color: var(--ink);
+    }
+
+    button.warn {
+      background: var(--warning);
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .table-wrap {
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.6);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(247, 241, 232, 0.95);
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .status-bar {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(47,108,100,0.12);
+      color: var(--accent-2);
+      min-height: 46px;
+    }
+
+    .mono {
+      font-family: "SFMono-Regular", "Menlo", monospace;
+      word-break: break-all;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 1100px) {
+      .hero, .grid, .two-col { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 720px) {
+      .stats, .form-grid { grid-template-columns: 1fr; }
+      .shell { padding: 18px 14px 36px; }
+      .hero-card, .token-card, .section { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="hero">
+      <section class="panel hero-card">
+        <h1>Trojan Control Center</h1>
+        <p>统一查看节点、用户、绑定关系、任务状态和聚合订阅。页面本身不做登录态存储之外的后端会话，所有操作都通过你输入的控制端 Bearer Token 调用控制中心 API。</p>
+      </section>
+      <section class="panel token-card">
+        <div class="form-grid">
+          <div>
+            <label for="loginUsername">Admin Username</label>
+            <input id="loginUsername" type="text" placeholder="admin">
+          </div>
+          <div>
+            <label for="loginPassword">Admin Password</label>
+            <input id="loginPassword" type="password" placeholder="输入管理员密码">
+          </div>
+        </div>
+        <div class="token-row">
+          <button id="loginBtn">登录控制台</button>
+          <button id="logoutBtn" class="ghost">退出登录</button>
+        </div>
+        <div class="mono" id="sessionSummary" style="font-size:13px;color:var(--muted);">当前会话: 未登录</div>
+        <div>
+          <label for="tokenInput">Manual Bearer Token</label>
+          <input id="tokenInput" type="password" placeholder="可选：输入 control token 覆盖 JWT">
+        </div>
+        <div class="token-row">
+          <button id="saveTokenBtn" class="secondary">保存 Token</button>
+          <button id="refreshBtn">刷新面板</button>
+        </div>
+        <div class="status-bar" id="statusBar">等待初始化。</div>
+      </section>
+    </div>
+
+    <section class="panel section" style="margin-bottom:18px;">
+      <h2>Overview</h2>
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes">0</div></div>
+        <div class="stat"><div class="stat-label">Users</div><div class="stat-value" id="statUsers">0</div></div>
+        <div class="stat"><div class="stat-label">Tasks</div><div class="stat-value" id="statTasks">0</div></div>
+        <div class="stat"><div class="stat-label">Last Seen</div><div class="stat-value" id="statLastSeen" style="font-size:16px;">-</div></div>
+      </div>
+      <div class="mono" id="taskStatusSummary" style="margin-top:12px; color:var(--muted); font-size:13px;">任务状态摘要: -</div>
+    </section>
+
+    <div class="grid">
+      <div class="stack">
+        <section class="panel section">
+          <h2>Create User</h2>
+          <div class="form-grid">
+            <div><label>Username</label><input id="userUsername" placeholder="alice"></div>
+            <div><label>Password</label><input id="userPassword" placeholder="Base64 密码，例如 YWxpY2UtcGFzcw=="></div>
+            <div><label>Quota</label><input id="userQuota" type="number" placeholder="4096"></div>
+            <div><label>Use Days</label><input id="userUseDays" type="number" placeholder="30"></div>
+          </div>
+          <div class="row-actions" style="margin-top:12px;">
+            <button id="createUserBtn">创建或更新用户</button>
+          </div>
+        </section>
+
+        <section class="panel section">
+          <h2>Bind And Sync</h2>
+          <div class="form-grid">
+            <div><label>Username</label><input id="bindUsername" placeholder="alice"></div>
+            <div><label>Node Key</label><input id="bindNodeKey" placeholder="node-01"></div>
+          </div>
+          <div class="row-actions" style="margin-top:12px;">
+            <button id="bindBtn">绑定用户到节点</button>
+            <button id="unbindBtn" class="ghost">解绑</button>
+            <button id="syncBtn" class="secondary">为节点生成同步任务</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="panel section">
+          <h2>User Inspector</h2>
+          <div class="form-grid">
+            <div><label>Username</label><input id="inspectUsername" placeholder="alice"></div>
+            <div><label>Actions</label>
+              <div class="row-actions">
+                <button id="inspectBtn" class="secondary">查看详情</button>
+                <button id="deleteUserBtn" class="warn">删除用户</button>
+              </div>
+            </div>
+          </div>
+          <div class="row-actions" style="margin-top:12px;">
+            <button id="downloadClashBtn">下载 Clash 订阅</button>
+            <button id="downloadLinksBtn" class="secondary">下载 Trojan 链接</button>
+          </div>
+          <div style="margin-top:14px;">
+            <label>User Summary</label>
+            <textarea id="userSummary" readonly placeholder="这里会显示绑定节点、用量和订阅摘要。"></textarea>
+          </div>
+        </section>
+
+        <section class="panel section">
+          <h2>Task Actions</h2>
+          <div class="form-grid">
+            <div><label>Task ID</label><input id="retryTaskId" type="number" placeholder="1"></div>
+            <div><label>Action</label>
+              <div class="row-actions">
+                <button id="retryTaskBtn">重试任务</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="panel section">
+          <h2>Admin Console</h2>
+          <div class="form-grid">
+            <div><label>Username</label><input id="adminUsername" placeholder="ops-admin"></div>
+            <div><label>Password</label><input id="adminPassword" type="password" placeholder="留空表示更新时不修改密码"></div>
+            <div><label>Role</label>
+              <select id="adminRole">
+                <option value="viewer">viewer</option>
+                <option value="admin" selected>admin</option>
+                <option value="super_admin">super_admin</option>
+              </select>
+            </div>
+            <div><label>Status</label>
+              <select id="adminStatus">
+                <option value="active" selected>active</option>
+                <option value="disabled">disabled</option>
+              </select>
+            </div>
+          </div>
+          <div class="row-actions" style="margin-top:12px;">
+            <button id="createAdminBtn">创建管理员</button>
+            <button id="updateAdminBtn" class="secondary">更新管理员</button>
+            <button id="refreshAdminsBtn" class="ghost">刷新管理员</button>
+          </div>
+          <div style="margin-top:14px;">
+            <label>Admin Summary</label>
+            <textarea id="adminSummary" readonly placeholder="这里会显示管理员列表和角色状态。"></textarea>
+          </div>
+        </section>
+
+        <section class="panel section">
+          <h2>Quick Tips</h2>
+          <div class="mono" style="font-size:13px; line-height:1.7; color:var(--muted);">
+            1. 先在节点上启动 <code>trojan agent</code><br>
+            2. 在这里创建用户<br>
+            3. 把用户绑定到节点<br>
+            4. 点击同步，为节点生成 <code>sync_users</code> 任务<br>
+            5. Agent 轮询后会自动执行并回报结果<br>
+            6. `viewer` 只读，`admin` 可运维，`super_admin` 才能管理管理员
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <section class="panel section">
+        <h2>Nodes</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Node</th>
+                <th>Endpoint</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="nodesTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel section">
+        <h2>Users</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Quota</th>
+                <th>Use Days</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel section" style="margin-top:18px;">
+      <h2>Tasks</h2>
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div><label>Filter Node</label><input id="taskFilterNodeKey" placeholder="node-01"></div>
+        <div><label>Filter Type</label><input id="taskFilterType" placeholder="sync_users"></div>
+        <div><label>Filter Status</label>
+          <select id="taskFilterStatus">
+            <option value="">全部</option>
+            <option value="pending">pending</option>
+            <option value="running">running</option>
+            <option value="succeeded">succeeded</option>
+            <option value="failed">failed</option>
+          </select>
+        </div>
+        <div>
+          <label>Actions</label>
+          <div class="row-actions">
+            <button id="applyTaskFilterBtn" class="secondary">应用筛选</button>
+            <button id="resetTaskFilterBtn" class="ghost">重置</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Node</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Message</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tasksTable"></tbody>
+        </table>
+      </div>
+      <div class="row-actions" style="margin-top:12px;">
+        <button id="taskPrevBtn" class="ghost">上一页</button>
+        <button id="taskNextBtn" class="ghost">下一页</button>
+        <span id="taskPageInfo" class="muted">第 1 页</span>
+      </div>
+      <div style="margin-top:14px;">
+        <label>Task Detail And Audit Trail</label>
+        <textarea id="taskDetail" readonly placeholder="这里会显示任务详情、结果和事件审计。"></textarea>
+      </div>
+    </section>
+
+    <section class="panel section" style="margin-top:18px;">
+      <h2>Audit Logs</h2>
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div><label>Actor</label><input id="auditActor" placeholder="admin"></div>
+        <div><label>Action</label><input id="auditAction" placeholder="user.delete"></div>
+        <div><label>Resource Type</label><input id="auditResourceType" placeholder="user"></div>
+        <div>
+          <label>Actions</label>
+          <div class="row-actions">
+            <button id="applyAuditFilterBtn" class="secondary">查询审计</button>
+            <button id="resetAuditFilterBtn" class="ghost">重置</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label>Audit Timeline</label>
+        <textarea id="auditSummary" readonly placeholder="这里会显示最近的控制中心操作审计。"></textarea>
+      </div>
+      <div class="row-actions" style="margin-top:12px;">
+        <button id="auditPrevBtn" class="ghost">上一页</button>
+        <button id="auditNextBtn" class="ghost">下一页</button>
+        <span id="auditPageInfo" class="muted">第 1 页</span>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const tokenInput = document.getElementById('tokenInput');
+    const statusBar = document.getElementById('statusBar');
+    const taskDetail = document.getElementById('taskDetail');
+    const sessionSummary = document.getElementById('sessionSummary');
+    const adminSummary = document.getElementById('adminSummary');
+    const auditSummary = document.getElementById('auditSummary');
+
+    const savedToken = localStorage.getItem('control-token') || '';
+    const savedSessionToken = localStorage.getItem('control-session-token') || '';
+    const savedSessionUser = localStorage.getItem('control-session-user') || '';
+    tokenInput.value = savedToken;
+    document.getElementById('loginUsername').value = savedSessionUser || 'admin';
+    let currentTaskQuery = {limit: 100, offset: 0, hasMore: false};
+    let currentAuditQuery = {limit: 100, offset: 0, hasMore: false};
+
+    function setStatus(message, isError = false) {
+      statusBar.textContent = message;
+      statusBar.style.background = isError ? 'rgba(139,46,36,0.12)' : 'rgba(47,108,100,0.12)';
+      statusBar.style.color = isError ? '#8b2e24' : '#2f6c64';
+    }
+
+    function getToken() {
+      return tokenInput.value.trim();
+    }
+
+    function getSessionToken() {
+      return localStorage.getItem('control-session-token') || '';
+    }
+
+    function getActiveToken() {
+      return getToken() || getSessionToken();
+    }
+
+    function saveToken() {
+      localStorage.setItem('control-token', getToken());
+      setStatus('Token 已保存。');
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const token = getActiveToken();
+      if (token) headers.set('Authorization', 'Bearer ' + token);
+      if (options.body && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      const response = await fetch(path, {...options, headers});
+
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.message || '请求失败');
+        return body.data;
+      }
+
+      const text = await response.text();
+      if (!response.ok) throw new Error(text || '请求失败');
+      return text;
+    }
+
+    function renderSessionSummary(admin) {
+      if (!admin) {
+        sessionSummary.textContent = '当前会话: 未登录';
+        return;
+      }
+      sessionSummary.textContent = `当前会话: ${admin.username} (${admin.role || '-'})`;
+    }
+
+    function saveSession(token, admin) {
+      localStorage.setItem('control-session-token', token);
+      localStorage.setItem('control-session-user', admin.username || '');
+      localStorage.setItem('control-session-role', admin.role || '');
+      renderSessionSummary(admin);
+    }
+
+    function clearSession() {
+      localStorage.removeItem('control-session-token');
+      localStorage.removeItem('control-session-user');
+      localStorage.removeItem('control-session-role');
+      renderSessionSummary(null);
+    }
+
+    function currentSessionRole() {
+      return localStorage.getItem('control-session-role') || '';
+    }
+
+    function currentSessionCanReadAudit() {
+      return getToken() || currentSessionRole() === 'admin' || currentSessionRole() === 'super_admin';
+    }
+
+    function fmtDate(value) {
+      if (!value) return '-';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString();
+    }
+
+    function fmtQuota(value) {
+      if (value === undefined || value === null) return '-';
+      return String(value);
+    }
+
+    async function refreshAll() {
+      try {
+        const [overview, nodesData, usersData] = await Promise.all([
+          apiFetch('/api/control/overview'),
+          apiFetch('/api/control/nodes'),
+          apiFetch('/api/control/users')
+        ]);
+        renderOverview(overview);
+        renderNodes(nodesData.nodes || []);
+        renderUsers(usersData.users || []);
+        await loadTasks();
+        await loadAdmins();
+        await loadAuditLogs();
+        setStatus('面板已刷新。');
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function loginControl() {
+      try {
+        const data = await apiFetch('/api/control/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('loginUsername').value.trim(),
+            password: document.getElementById('loginPassword').value
+          }),
+          headers: {}
+        });
+        saveSession(data.token, data.admin || {});
+        document.getElementById('loginPassword').value = '';
+        setStatus('控制台登录成功。');
+        await refreshAll();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function loadSessionProfile() {
+      const token = getSessionToken();
+      if (!token) {
+        renderSessionSummary(null);
+        return;
+      }
+      try {
+        const data = await apiFetch('/api/control/auth/me', {
+          headers: {Authorization: 'Bearer ' + token}
+        });
+        localStorage.setItem('control-session-role', data.role || '');
+        renderSessionSummary(data);
+      } catch (_) {
+        clearSession();
+      }
+    }
+
+    async function logoutControl() {
+      clearSession();
+      adminSummary.value = '';
+      setStatus('控制台会话已退出。');
+    }
+
+    async function loadAdmins() {
+      if (currentSessionRole() !== 'super_admin' && !getToken()) {
+        adminSummary.value = '当前账号不是 super_admin，管理员列表不可见。';
+        return;
+      }
+      try {
+        const data = await apiFetch('/api/control/admins');
+        const admins = data.admins || [];
+        adminSummary.value = admins.length === 0
+          ? '暂无管理员'
+          : admins.map(admin => `${admin.username} | role=${admin.role} | status=${admin.status} | updated=${fmtDate(admin.updatedAt)}`).join('\n');
+      } catch (error) {
+        adminSummary.value = `管理员列表不可用: ${error.message}`;
+      }
+    }
+
+    function getAuditQuery() {
+      return {
+        limit: 100,
+        offset: currentAuditQuery.offset || 0,
+        actor: document.getElementById('auditActor').value.trim(),
+        action: document.getElementById('auditAction').value.trim(),
+        resourceType: document.getElementById('auditResourceType').value.trim()
+      };
+    }
+
+    function buildAuditQueryString(query) {
+      const params = new URLSearchParams();
+      params.set('limit', String(query.limit || 100));
+      params.set('offset', String(query.offset || 0));
+      if (query.actor) params.set('actor', query.actor);
+      if (query.action) params.set('action', query.action);
+      if (query.resourceType) params.set('resourceType', query.resourceType);
+      return params.toString();
+    }
+
+    function updateAuditPager(offset, limit, hasMore) {
+      currentAuditQuery.offset = offset;
+      currentAuditQuery.limit = limit;
+      currentAuditQuery.hasMore = hasMore;
+      document.getElementById('auditPageInfo').textContent = `第 ${Math.floor(offset / limit) + 1} 页`;
+      document.getElementById('auditPrevBtn').disabled = offset <= 0;
+      document.getElementById('auditNextBtn').disabled = !hasMore;
+    }
+
+    async function loadAuditLogs() {
+      if (!currentSessionCanReadAudit()) {
+        auditSummary.value = '当前账号没有审计查看权限。';
+        return;
+      }
+      try {
+        currentAuditQuery = getAuditQuery();
+        const data = await apiFetch('/api/control/audit?' + buildAuditQueryString(currentAuditQuery));
+        const logs = data.logs || [];
+        updateAuditPager(Number(data.offset || 0), Number(data.limit || currentAuditQuery.limit || 100), Boolean(data.hasMore));
+        auditSummary.value = logs.length === 0
+          ? '暂无审计日志'
+          : logs.map(log => `[${fmtDate(log.createdAt)}] ${log.actor}(${log.actorRole}) ${log.action} ${log.resourceType}:${log.resourceId} | ${log.message}`).join('\n');
+      } catch (error) {
+        auditSummary.value = `审计日志不可用: ${error.message}`;
+      }
+    }
+
+    async function applyAuditFilters() {
+      try {
+        currentAuditQuery.offset = 0;
+        await loadAuditLogs();
+        setStatus('审计筛选已应用。');
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function resetAuditFilters() {
+      document.getElementById('auditActor').value = '';
+      document.getElementById('auditAction').value = '';
+      document.getElementById('auditResourceType').value = '';
+      currentAuditQuery.offset = 0;
+      await applyAuditFilters();
+    }
+
+    async function createAdmin() {
+      try {
+        await apiFetch('/api/control/admins', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('adminUsername').value.trim(),
+            password: document.getElementById('adminPassword').value,
+            role: document.getElementById('adminRole').value
+          })
+        });
+        document.getElementById('adminPassword').value = '';
+        setStatus('管理员已创建。');
+        await loadAdmins();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function updateAdmin() {
+      try {
+        const username = document.getElementById('adminUsername').value.trim();
+        await apiFetch(`/api/control/admins/${encodeURIComponent(username)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            password: document.getElementById('adminPassword').value,
+            role: document.getElementById('adminRole').value,
+            status: document.getElementById('adminStatus').value
+          })
+        });
+        document.getElementById('adminPassword').value = '';
+        setStatus('管理员已更新。');
+        await loadAdmins();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    function renderOverview(data) {
+      document.getElementById('statNodes').textContent = data.nodeCount ?? 0;
+      document.getElementById('statUsers').textContent = data.userCount ?? 0;
+      document.getElementById('statTasks').textContent = data.taskCount ?? 0;
+      document.getElementById('statLastSeen').textContent = data.lastNodeSeenAt ? fmtDate(data.lastNodeSeenAt) : '-';
+      const status = data.taskStatus || {};
+      const summary = Object.keys(status).length
+        ? Object.entries(status).map(([key, value]) => `${key}=${value}`).join(' | ')
+        : '-';
+      document.getElementById('taskStatusSummary').textContent = '任务状态摘要: ' + summary;
+    }
+
+    function renderNodes(nodes) {
+      const tbody = document.getElementById('nodesTable');
+      tbody.innerHTML = nodes.map(node => `
+        <tr>
+          <td><strong>${escapeHTML(node.name || node.nodeKey)}</strong><br><span class="mono">${escapeHTML(node.nodeKey)}</span></td>
+          <td>${escapeHTML(node.domainName || node.endpoint || node.publicIp || '-')} : ${node.port || 443}</td>
+          <td>${escapeHTML(node.status || '-')}</td>
+          <td>${escapeHTML(fmtDate(node.lastSeenAt))}</td>
+          <td>
+            <div class="row-actions">
+              <button class="ghost" onclick="prefillNode('${escapeAttr(node.nodeKey)}')">填入同步</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById('usersTable');
+      tbody.innerHTML = users.map(user => `
+        <tr>
+          <td><strong>${escapeHTML(user.username)}</strong></td>
+          <td>${fmtQuota(user.quota)}</td>
+          <td>${user.useDays ?? 0}</td>
+          <td>
+            <div class="row-actions">
+              <button class="ghost" onclick="prefillUser('${escapeAttr(user.username)}')">查看</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderTasks(tasks) {
+      const tbody = document.getElementById('tasksTable');
+      tbody.innerHTML = tasks.map(task => `
+        <tr>
+          <td>${task.id}</td>
+          <td>${escapeHTML(task.nodeKey)}</td>
+          <td>${escapeHTML(task.taskType)}</td>
+          <td>${escapeHTML(task.status)}</td>
+          <td>${escapeHTML(task.resultMessage || '-')}</td>
+          <td>
+            <div class="row-actions">
+              <button class="secondary" onclick="inspectTask(${task.id})">详情</button>
+              <button class="ghost" onclick="prefillRetry(${task.id})">重试</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function getTaskQuery() {
+      return {
+        limit: 100,
+        offset: currentTaskQuery.offset || 0,
+        nodeKey: document.getElementById('taskFilterNodeKey').value.trim(),
+        taskType: document.getElementById('taskFilterType').value.trim(),
+        status: document.getElementById('taskFilterStatus').value.trim()
+      };
+    }
+
+    function buildTaskQueryString(query) {
+      const params = new URLSearchParams();
+      params.set('limit', String(query.limit || 100));
+      params.set('offset', String(query.offset || 0));
+      if (query.nodeKey) params.set('nodeKey', query.nodeKey);
+      if (query.taskType) params.set('taskType', query.taskType);
+      if (query.status) params.set('status', query.status);
+      return params.toString();
+    }
+
+    function updateTaskPager(offset, limit, hasMore) {
+      currentTaskQuery.offset = offset;
+      currentTaskQuery.limit = limit;
+      currentTaskQuery.hasMore = hasMore;
+      document.getElementById('taskPageInfo').textContent = `第 ${Math.floor(offset / limit) + 1} 页`;
+      document.getElementById('taskPrevBtn').disabled = offset <= 0;
+      document.getElementById('taskNextBtn').disabled = !hasMore;
+    }
+
+    async function loadTasks() {
+      currentTaskQuery = getTaskQuery();
+      const tasksData = await apiFetch('/api/control/tasks?' + buildTaskQueryString(currentTaskQuery));
+      renderTasks(tasksData.tasks || []);
+      updateTaskPager(Number(tasksData.offset || 0), Number(tasksData.limit || currentTaskQuery.limit || 100), Boolean(tasksData.hasMore));
+    }
+
+    async function createUser() {
+      try {
+        await apiFetch('/api/control/users', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('userUsername').value.trim(),
+            password: document.getElementById('userPassword').value.trim(),
+            quota: Number(document.getElementById('userQuota').value || 0),
+            useDays: Number(document.getElementById('userUseDays').value || 0)
+          })
+        });
+        setStatus('用户已创建或更新。');
+        await refreshAll();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function bindUser() {
+      try {
+        const username = document.getElementById('bindUsername').value.trim();
+        const nodeKey = document.getElementById('bindNodeKey').value.trim();
+        await apiFetch(`/api/control/users/${encodeURIComponent(username)}/bindings`, {
+          method: 'POST',
+          body: JSON.stringify({nodeKey})
+        });
+        setStatus('绑定成功。');
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function unbindUser() {
+      try {
+        const username = document.getElementById('bindUsername').value.trim();
+        const nodeKey = document.getElementById('bindNodeKey').value.trim();
+        await apiFetch(`/api/control/users/${encodeURIComponent(username)}/bindings/${encodeURIComponent(nodeKey)}`, {
+          method: 'DELETE'
+        });
+        setStatus('解绑成功。');
+        await refreshAll();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function syncNode() {
+      try {
+        const nodeKey = document.getElementById('bindNodeKey').value.trim();
+        await apiFetch(`/api/control/nodes/${encodeURIComponent(nodeKey)}/sync`, {method: 'POST'});
+        setStatus('已生成同步任务。');
+        await refreshAll();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function inspectUser() {
+      try {
+        const username = document.getElementById('inspectUsername').value.trim();
+        const [user, nodesData, usageData] = await Promise.all([
+          apiFetch(`/api/control/users/${encodeURIComponent(username)}`),
+          apiFetch(`/api/control/users/${encodeURIComponent(username)}/nodes`),
+          apiFetch(`/api/control/users/${encodeURIComponent(username)}/usage?limit=20`)
+        ]);
+
+        const summary = [];
+        summary.push(`用户: ${user.username}`);
+        summary.push(`流量限额: ${user.quota}`);
+        summary.push(`使用天数: ${user.useDays}`);
+        summary.push(`到期日期: ${user.expiryDate || '-'}`);
+        summary.push('');
+        summary.push('绑定节点:');
+        (nodesData.nodes || []).forEach(node => {
+          summary.push(`- ${node.name || node.nodeKey} (${node.domainName || node.endpoint || node.publicIp || node.nodeKey}:${node.port || 443})`);
+        });
+        summary.push('');
+        summary.push('最近用量:');
+        (usageData.usage || []).forEach(item => {
+          summary.push(`- ${item.nodeKey} | up=${item.upload} down=${item.download} quota=${item.quota} time=${fmtDate(item.reportedAt)}`);
+        });
+        document.getElementById('userSummary').value = summary.join('\n');
+        setStatus('用户详情已加载。');
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function deleteUser() {
+      try {
+        const username = document.getElementById('inspectUsername').value.trim();
+        await apiFetch(`/api/control/users/${encodeURIComponent(username)}`, {method: 'DELETE'});
+        document.getElementById('userSummary').value = '';
+        setStatus('用户已删除。');
+        await refreshAll();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function retryTask() {
+      try {
+        const taskId = document.getElementById('retryTaskId').value.trim();
+        await apiFetch(`/api/control/tasks/${encodeURIComponent(taskId)}/retry`, {method: 'POST'});
+        setStatus('任务已重新入队。');
+        await refreshAll();
+        await inspectTask(taskId);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function inspectTask(taskId) {
+      try {
+        const data = await apiFetch(`/api/control/tasks/${encodeURIComponent(taskId)}?limit=100`);
+        const task = data.task || {};
+        const events = data.events || [];
+        const lines = [];
+        lines.push(`任务 ID: ${task.id}`);
+        lines.push(`节点: ${task.nodeKey || '-'}`);
+        lines.push(`类型: ${task.taskType || '-'}`);
+        lines.push(`状态: ${task.status || '-'}`);
+        lines.push(`创建时间: ${fmtDate(task.createdAt)}`);
+        lines.push(`开始时间: ${fmtDate(task.startedAt)}`);
+        lines.push(`结束时间: ${fmtDate(task.finishedAt)}`);
+        lines.push(`结果消息: ${task.resultMessage || '-'}`);
+        lines.push(`Payload: ${JSON.stringify(task.payload || {}, null, 2)}`);
+        lines.push(`ResultDetails: ${JSON.stringify(task.resultDetails || {}, null, 2)}`);
+        lines.push('');
+        lines.push('事件审计:');
+        events.forEach(event => {
+          lines.push(`- [${fmtDate(event.createdAt)}] ${event.eventType} | actor=${event.actor || '-'} | ${event.message || '-'}`);
+          if (event.details && Object.keys(event.details).length > 0) {
+            lines.push(`  details=${JSON.stringify(event.details)}`);
+          }
+        });
+        taskDetail.value = lines.join('\n');
+        document.getElementById('retryTaskId').value = task.id || taskId;
+        setStatus(`任务 ${taskId} 详情已加载。`);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function applyTaskFilters() {
+      try {
+        currentTaskQuery.offset = 0;
+        await loadTasks();
+        setStatus('任务筛选已应用。');
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    async function resetTaskFilters() {
+      document.getElementById('taskFilterNodeKey').value = '';
+      document.getElementById('taskFilterType').value = '';
+      document.getElementById('taskFilterStatus').value = '';
+      currentTaskQuery.offset = 0;
+      taskDetail.value = '';
+      await applyTaskFilters();
+    }
+
+    async function nextTaskPage() {
+      if (!currentTaskQuery.hasMore) return;
+      currentTaskQuery.offset = (currentTaskQuery.offset || 0) + (currentTaskQuery.limit || 100);
+      await loadTasks();
+    }
+
+    async function prevTaskPage() {
+      currentTaskQuery.offset = Math.max(0, (currentTaskQuery.offset || 0) - (currentTaskQuery.limit || 100));
+      await loadTasks();
+    }
+
+    async function nextAuditPage() {
+      if (!currentAuditQuery.hasMore) return;
+      currentAuditQuery.offset = (currentAuditQuery.offset || 0) + (currentAuditQuery.limit || 100);
+      await loadAuditLogs();
+    }
+
+    async function prevAuditPage() {
+      currentAuditQuery.offset = Math.max(0, (currentAuditQuery.offset || 0) - (currentAuditQuery.limit || 100));
+      await loadAuditLogs();
+    }
+
+    async function downloadText(path, filename) {
+      try {
+        const token = getActiveToken();
+        const response = await fetch(path, {
+          headers: token ? {Authorization: 'Bearer ' + token} : {}
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || '下载失败');
+        }
+        const text = await response.text();
+        const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        setStatus('订阅已下载。');
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    function prefillUser(username) {
+      document.getElementById('inspectUsername').value = username;
+      document.getElementById('bindUsername').value = username;
+    }
+
+    function prefillNode(nodeKey) {
+      document.getElementById('bindNodeKey').value = nodeKey;
+    }
+
+    function prefillRetry(taskId) {
+      document.getElementById('retryTaskId').value = taskId;
+      inspectTask(taskId);
+    }
+
+    function prefillAdmin(username, role, status) {
+      document.getElementById('adminUsername').value = username || '';
+      document.getElementById('adminRole').value = role || 'admin';
+      document.getElementById('adminStatus').value = status || 'active';
+    }
+
+    function escapeHTML(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHTML(value).replaceAll("'", '&#39;');
+    }
+
+    document.getElementById('saveTokenBtn').addEventListener('click', saveToken);
+    document.getElementById('loginBtn').addEventListener('click', loginControl);
+    document.getElementById('logoutBtn').addEventListener('click', logoutControl);
+    document.getElementById('createAdminBtn').addEventListener('click', createAdmin);
+    document.getElementById('updateAdminBtn').addEventListener('click', updateAdmin);
+    document.getElementById('refreshAdminsBtn').addEventListener('click', loadAdmins);
+    document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+    document.getElementById('createUserBtn').addEventListener('click', createUser);
+    document.getElementById('bindBtn').addEventListener('click', bindUser);
+    document.getElementById('unbindBtn').addEventListener('click', unbindUser);
+    document.getElementById('syncBtn').addEventListener('click', syncNode);
+    document.getElementById('inspectBtn').addEventListener('click', inspectUser);
+    document.getElementById('deleteUserBtn').addEventListener('click', deleteUser);
+    document.getElementById('retryTaskBtn').addEventListener('click', retryTask);
+    document.getElementById('applyTaskFilterBtn').addEventListener('click', applyTaskFilters);
+    document.getElementById('resetTaskFilterBtn').addEventListener('click', resetTaskFilters);
+    document.getElementById('applyAuditFilterBtn').addEventListener('click', applyAuditFilters);
+    document.getElementById('resetAuditFilterBtn').addEventListener('click', resetAuditFilters);
+    document.getElementById('taskPrevBtn').addEventListener('click', prevTaskPage);
+    document.getElementById('taskNextBtn').addEventListener('click', nextTaskPage);
+    document.getElementById('auditPrevBtn').addEventListener('click', prevAuditPage);
+    document.getElementById('auditNextBtn').addEventListener('click', nextAuditPage);
+    document.getElementById('downloadClashBtn').addEventListener('click', () => {
+      const username = document.getElementById('inspectUsername').value.trim();
+      downloadText(`/api/control/users/${encodeURIComponent(username)}/subscription/clash`, `${username}-clash.yaml`);
+    });
+    document.getElementById('downloadLinksBtn').addEventListener('click', () => {
+      const username = document.getElementById('inspectUsername').value.trim();
+      downloadText(`/api/control/users/${encodeURIComponent(username)}/subscription/links`, `${username}-links.txt`);
+    });
+
+    loadSessionProfile();
+    refreshAll();
+    setInterval(refreshAll, 30000);
+  </script>
+</body>
+</html>

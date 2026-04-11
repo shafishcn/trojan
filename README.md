@@ -69,8 +69,10 @@ Usage:
 
 Available Commands:
   add           添加用户
+  agent         启动多节点节点代理
   clean         清空指定用户流量
   completion    自动命令补全(支持bash和zsh)
+  control       启动多节点控制中心原型
   del           删除用户
   help          Help about any command
   info          用户信息列表
@@ -94,6 +96,70 @@ Flags:
 
 ## 注意
 安装完trojan后强烈建议开启BBR等加速: [one_click_script](https://github.com/jinwyp/one_click_script)  
+
+## 多节点规划
+
+如果要把当前项目扩展为多 VPS 的统一控制中心，可参考以下设计草案：
+
+- [多节点统一管理设计草案](docs/multi-node-control-plane.md)
+- [多节点控制中心 MySQL 初版表结构](docs/multi-node-schema.sql)
+
+当前仓库也已经提供一个最小控制中心原型：
+
+```bash
+# 内存版
+go run . control --host 0.0.0.0 --port 8081 --admin-user admin --admin-pass change-me --agent-token agent-secret --login-rate-limit 30 --agent-rate-limit 600 --audit-retention-days 90 --task-retention-days 30 --usage-retention-days 30
+
+# MySQL版
+go run . control --store mysql --dsn 'root:pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true' --admin-user admin --admin-pass change-me --agent-token agent-secret --login-rate-limit 30 --agent-rate-limit 600 --audit-retention-days 90 --task-retention-days 30 --usage-retention-days 30
+
+# 节点 agent
+go run . agent --control-url http://127.0.0.1:8081 --token agent-secret --node-secret node-secret-001 --node-key node-01 --name tokyo-01 --domain hk.example.com --port 443
+```
+
+控制中心新增的多节点用户接口包括：
+
+- `GET /api/control/overview`
+- `GET/POST /api/control/users`
+- `GET/DELETE /api/control/users/:username`
+- `POST /api/control/users/:username/bindings`
+- `DELETE /api/control/users/:username/bindings/:nodeKey`
+- `GET /api/control/users/:username/nodes`
+- `GET /api/control/users/:username/usage`
+- `GET /api/control/users/:username/subscription/clash`
+- `GET /api/control/users/:username/subscription/links`
+- `GET /api/control/tasks?nodeKey=&taskType=&status=&limit=`
+- `GET /api/control/tasks?nodeKey=&taskType=&status=&limit=&offset=`
+- `GET /api/control/tasks/:id`
+- `GET /api/control/audit?actor=&action=&resourceType=&limit=&offset=`
+- `POST /api/control/nodes/:nodeKey/agent-secret/rotate`
+- `POST /api/control/maintenance/cleanup`
+- `GET /api/control/backup/export`
+- `POST /api/control/backup/import`
+- `POST /api/control/auth/login`
+- `GET /api/control/auth/me`
+- `GET /api/control/admins`
+- `POST /api/control/admins`
+- `PATCH /api/control/admins/:username`
+- `POST /api/control/nodes/:nodeKey/sync`
+- `POST /api/control/tasks/:id/retry`
+
+控制中心管理台根路径 `/` 现在也内置了最小运维界面，支持：
+
+- 管理员账号登录和 JWT 会话
+- `viewer / admin / super_admin` 三档角色
+- MySQL 启动时自动执行版本化 schema migration，记录在 `control_schema_migrations`
+- 节点支持独立 `node-secret` HMAC 签名鉴权，可由控制中心轮换
+- 登录接口和 Agent API 支持按分钟限流，可通过 `--login-rate-limit` / `--agent-rate-limit` 调整，设为负数可关闭
+- 任务列表和审计日志支持 `offset + limit` 分页
+- 启动后支持按保留天数自动清理审计日志、已完成任务/事件和 usage 快照，也支持手动触发清理
+- 支持 `super_admin` 导出和导入控制中心备份，覆盖管理员、节点、用户、绑定、任务、审计和 usage 状态
+- 节点、用户、任务总览
+- 任务状态筛选
+- 单任务详情和审计事件时间线
+- 控制中心操作审计查询
+- 管理员列表、管理员创建和角色/状态调整
+- 用户绑定、解绑、同步和订阅下载
 
 ## Thanks
 感谢JetBrains提供的免费GoLand  
