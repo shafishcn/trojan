@@ -12,22 +12,26 @@ import (
 )
 
 var (
-	controlHost        string
-	controlPort        int
-	controlStore       string
-	controlDSN         string
-	controlToken       string
-	agentToken         string
-	controlJWT         string
-	adminUser          string
-	adminPass          string
-	sessionHours       int
-	loginRate          int
-	agentRate          int
-	auditRetentionDays int
-	taskRetentionDays  int
-	usageRetentionDays int
-	cleanupIntervalMin int
+	controlHost               string
+	controlPort               int
+	controlStore              string
+	controlDSN                string
+	controlToken              string
+	agentToken                string
+	metricsToken              string
+	controlJWT                string
+	adminUser                 string
+	adminPass                 string
+	sessionHours              int
+	loginRate                 int
+	agentRate                 int
+	auditRetentionDays        int
+	taskRetentionDays         int
+	usageRetentionDays        int
+	cleanupIntervalMin        int
+	nodeStaleMinutes          int
+	failedTaskAlertThreshold  int
+	pendingTaskAlertThreshold int
 )
 
 // controlCmd starts the prototype control-plane server.
@@ -65,12 +69,20 @@ var controlCmd = &cobra.Command{
 		fmt.Printf("control plane listening on %s:%d\n", controlHost, controlPort)
 		startCleanupLoop(store)
 		router := control.NewRouter(store, control.ServerOptions{
-			ControlToken:      controlToken,
-			AgentToken:        agentToken,
-			ControlJWTSecret:  controlJWT,
-			ControlSessionTTL: time.Duration(sessionHours) * time.Hour,
-			LoginRateLimit:    loginRate,
-			AgentRateLimit:    agentRate,
+			ControlToken:              controlToken,
+			AgentToken:                agentToken,
+			MetricsToken:              metricsToken,
+			ControlJWTSecret:          controlJWT,
+			ControlSessionTTL:         time.Duration(sessionHours) * time.Hour,
+			LoginRateLimit:            loginRate,
+			AgentRateLimit:            agentRate,
+			AuditRetentionDays:        auditRetentionDays,
+			TaskRetentionDays:         taskRetentionDays,
+			UsageRetentionDays:        usageRetentionDays,
+			CleanupInterval:           time.Duration(cleanupIntervalMin) * time.Minute,
+			NodeStaleMinutes:          nodeStaleMinutes,
+			FailedTaskAlertThreshold:  failedTaskAlertThreshold,
+			PendingTaskAlertThreshold: pendingTaskAlertThreshold,
 		})
 		if err := router.Run(fmt.Sprintf("%s:%d", controlHost, controlPort)); err != nil {
 			fmt.Println(err)
@@ -93,6 +105,7 @@ func init() {
 	controlCmd.Flags().StringVar(&controlDSN, "dsn", "", "MySQL DSN，示例: root:pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true")
 	controlCmd.Flags().StringVar(&controlToken, "control-token", "", "控制端 Bearer Token")
 	controlCmd.Flags().StringVar(&agentToken, "agent-token", "", "Agent Bearer Token")
+	controlCmd.Flags().StringVar(&metricsToken, "metrics-token", "", "Prometheus 指标接口 Bearer Token")
 	controlCmd.Flags().StringVar(&controlJWT, "jwt-secret", "", "控制中心 JWT Secret，可用 TROJAN_CONTROL_JWT_SECRET")
 	controlCmd.Flags().StringVar(&adminUser, "admin-user", "admin", "启动时自动创建的控制中心管理员用户名")
 	controlCmd.Flags().StringVar(&adminPass, "admin-pass", "", "启动时自动创建的控制中心管理员密码")
@@ -103,6 +116,9 @@ func init() {
 	controlCmd.Flags().IntVar(&taskRetentionDays, "task-retention-days", 30, "已完成任务和任务事件保留天数，设为0或负数可关闭自动清理")
 	controlCmd.Flags().IntVar(&usageRetentionDays, "usage-retention-days", 30, "节点 usage 快照保留天数，设为0或负数可关闭自动清理")
 	controlCmd.Flags().IntVar(&cleanupIntervalMin, "cleanup-interval-minutes", 60, "后台历史数据清理间隔(分钟)，设为0或负数可关闭自动清理任务")
+	controlCmd.Flags().IntVar(&nodeStaleMinutes, "node-stale-minutes", 10, "节点超过多少分钟未上报心跳时进入告警")
+	controlCmd.Flags().IntVar(&failedTaskAlertThreshold, "failed-task-alert-threshold", 1, "失败任务达到多少条时触发告警")
+	controlCmd.Flags().IntVar(&pendingTaskAlertThreshold, "pending-task-alert-threshold", 20, "待处理任务达到多少条时触发积压告警")
 	rootCmd.AddCommand(controlCmd)
 }
 

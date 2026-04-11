@@ -88,12 +88,17 @@ root:strong-pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8m
 可直接参考：
 
 - [docs/examples/nginx-control.conf](examples/nginx-control.conf)
+- [docs/examples/Caddyfile](examples/Caddyfile)
 
 建议策略：
 
 - `/` 和 `/api/` 走主站域名
 - `/metrics` 只允许 Prometheus 源地址访问
 - 只开放 `443`
+
+如果更偏向自动 HTTPS，可以直接用 Caddy，配置样例已放在：
+
+- [docs/examples/Caddyfile](examples/Caddyfile)
 
 ## Prometheus 抓取
 
@@ -122,6 +127,56 @@ root:strong-pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8m
 - 最近 7 天热备
 - 最近 30 天冷备
 
+仓库里也提供了脚本模板：
+
+- [docs/examples/backup-control-plane.sh](examples/backup-control-plane.sh)
+- [docs/examples/restore-control-plane.sh](examples/restore-control-plane.sh)
+- [docs/examples/backup-control-plane.cron](examples/backup-control-plane.cron)
+- [docs/disaster-recovery-drill.md](disaster-recovery-drill.md)
+
+建议先赋执行权限：
+
+```bash
+chmod +x docs/examples/backup-control-plane.sh docs/examples/restore-control-plane.sh
+```
+
+备份示例：
+
+```bash
+export TROJAN_CONTROL_URL="https://control.example.com"
+export TROJAN_CONTROL_TOKEN="your-super-admin-token"
+export BACKUP_DIR="/var/backups/trojan-control"
+
+./docs/examples/backup-control-plane.sh
+```
+
+恢复示例：
+
+```bash
+export TROJAN_CONTROL_URL="https://control.example.com"
+export TROJAN_CONTROL_TOKEN="your-super-admin-token"
+
+./docs/examples/restore-control-plane.sh /var/backups/trojan-control/control-backup-20260411-120000.json
+```
+
+恢复脚本会自动兼容两种输入：
+
+- 直接保存的 `backup` JSON
+- `GET /api/control/backup/export` 的完整响应 JSON
+
+如果你希望直接落到定时任务，可以参考：
+
+- [docs/examples/backup-control-plane.cron](examples/backup-control-plane.cron)
+
+建议把恢复演练也制度化，清单模板见：
+
+- [docs/disaster-recovery-drill.md](disaster-recovery-drill.md)
+
+如果准备把发布升级流程也标准化，可继续参考：
+
+- [docs/release-upgrade-sop.md](release-upgrade-sop.md)
+- [docs/rollback-runbook.md](rollback-runbook.md)
+
 ## 上线检查清单
 
 - 控制中心和 Agent 都已跑在 `systemd`
@@ -148,3 +203,8 @@ root:strong-pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8m
 - 优先回滚控制中心二进制
 - 用最近备份恢复控制中心状态
 - 暂停批量 Agent 升级
+
+更完整的升级和回滚步骤见：
+
+- [docs/release-upgrade-sop.md](release-upgrade-sop.md)
+- [docs/rollback-runbook.md](rollback-runbook.md)

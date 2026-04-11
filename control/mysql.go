@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -251,6 +252,114 @@ var controlMigrations = []controlMigration{
 			return nil
 		},
 	},
+}
+
+// RuntimeStatus reports the current SQL-backed control-plane status.
+func (s *MySQLStore) RuntimeStatus() (*RuntimeStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	status := &RuntimeStatus{
+		Backend:   "mysql",
+		Healthy:   false,
+		CheckedAt: time.Now().UTC(),
+		Details:   map[string]interface{}{},
+	}
+	if err := s.db.PingContext(ctx); err != nil {
+		status.Details["error"] = err.Error()
+		return status, err
+	}
+
+	stats := s.db.Stats()
+	status.Healthy = true
+	status.Details["openConnections"] = stats.OpenConnections
+	status.Details["inUse"] = stats.InUse
+	status.Details["idle"] = stats.Idle
+	status.Details["waitCount"] = stats.WaitCount
+	status.Details["waitDurationMs"] = stats.WaitDuration.Milliseconds()
+	status.Details["maxIdleClosed"] = stats.MaxIdleClosed
+	status.Details["maxIdleTimeClosed"] = stats.MaxIdleTimeClosed
+	status.Details["maxLifetimeClosed"] = stats.MaxLifetimeClosed
+
+	applied, err := loadAppliedControlMigrations(s.db)
+	if err != nil {
+		status.Details["migrationError"] = err.Error()
+		return status, nil
+	}
+	status.Details["appliedMigrationCount"] = len(applied)
+	status.Details["expectedMigrationCount"] = len(controlMigrations)
+	status.Details["pendingMigrationCount"] = len(pendingControlMigrationVersions(applied))
+	return status, nil
+}
+
+// MetricsSnapshot reports current SQL-backed metrics for scraping.
+func (s *MySQLStore) MetricsSnapshot() (*MetricsSnapshot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	snapshot := &MetricsSnapshot{
+		Backend:   "mysql",
+		Healthy:   false,
+		CheckedAt: time.Now().UTC(),
+	}
+	if err := s.db.PingContext(ctx); err != nil {
+		return snapshot, err
+	}
+	snapshot.Healthy = true
+
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes`).Scan(&snapshot.NodeCount); err != nil {
+		return snapshot, err
+	}
+	activeCutoff := time.Now().Add(-5 * time.Minute)
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM nodes WHERE last_seen_at IS NOT NULL AND last_seen_at >= ?`, activeCutoff).Scan(&snapshot.ActiveNodeCount); err != nil {
+		return snapshot, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM control_users`).Scan(&snapshot.UserCount); err != nil {
+		return snapshot, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM control_admins`).Scan(&snapshot.AdminCount); err != nil {
+		return snapshot, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks`).Scan(&snapshot.TaskCount); err != nil {
+		return snapshot, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM tasks GROUP BY status`)
+	if err != nil {
+		return snapshot, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			status string
+			count  int64
+		)
+		if err := rows.Scan(&status, &count); err != nil {
+			return snapshot, err
+		}
+		switch status {
+		case "pending":
+			snapshot.TaskPendingCount = count
+		case "running":
+			snapshot.TaskRunningCount = count
+		case "succeeded":
+			snapshot.TaskSucceededCount = count
+		case "failed":
+			snapshot.TaskFailedCount = count
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return snapshot, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_events`).Scan(&snapshot.TaskEventCount); err != nil {
+		return snapshot, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM control_audit_logs`).Scan(&snapshot.AuditLogCount); err != nil {
+		return snapshot, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM usage_reports`).Scan(&snapshot.UsageCount); err != nil {
+		return snapshot, err
+	}
+	return snapshot, nil
 }
 
 // MySQLStore persists control-plane state in MySQL.

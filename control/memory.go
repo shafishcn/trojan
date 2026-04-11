@@ -42,6 +42,86 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
+// RuntimeStatus reports the current in-memory control-plane status.
+func (s *MemoryStore) RuntimeStatus() (*RuntimeStatus, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	taskCount := 0
+	for _, tasks := range s.tasks {
+		taskCount += len(tasks)
+	}
+	taskEventCount := 0
+	for _, events := range s.taskEvents {
+		taskEventCount += len(events)
+	}
+	usageCount := 0
+	for _, usage := range s.usage {
+		usageCount += len(usage)
+	}
+
+	return &RuntimeStatus{
+		Backend:   "memory",
+		Healthy:   true,
+		CheckedAt: time.Now().UTC(),
+		Details: map[string]interface{}{
+			"nodeCount":      len(s.nodes),
+			"userCount":      len(s.users),
+			"adminCount":     len(s.admins),
+			"taskCount":      taskCount,
+			"taskEventCount": taskEventCount,
+			"auditLogCount":  len(s.auditLogs),
+			"usageCount":     usageCount,
+		},
+	}, nil
+}
+
+// MetricsSnapshot reports current in-memory metrics for scraping.
+func (s *MemoryStore) MetricsSnapshot() (*MetricsSnapshot, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	snapshot := &MetricsSnapshot{
+		Backend:   "memory",
+		Healthy:   true,
+		CheckedAt: time.Now().UTC(),
+	}
+	cutoff := time.Now().Add(-5 * time.Minute)
+
+	snapshot.NodeCount = int64(len(s.nodes))
+	for _, node := range s.nodes {
+		if !node.LastSeenAt.IsZero() && node.LastSeenAt.After(cutoff) {
+			snapshot.ActiveNodeCount++
+		}
+	}
+	snapshot.UserCount = int64(len(s.users))
+	snapshot.AdminCount = int64(len(s.admins))
+	snapshot.AuditLogCount = int64(len(s.auditLogs))
+
+	for _, tasks := range s.tasks {
+		snapshot.TaskCount += int64(len(tasks))
+		for _, task := range tasks {
+			switch task.Status {
+			case "pending":
+				snapshot.TaskPendingCount++
+			case "running":
+				snapshot.TaskRunningCount++
+			case "succeeded":
+				snapshot.TaskSucceededCount++
+			case "failed":
+				snapshot.TaskFailedCount++
+			}
+		}
+	}
+	for _, events := range s.taskEvents {
+		snapshot.TaskEventCount += int64(len(events))
+	}
+	for _, usage := range s.usage {
+		snapshot.UsageCount += int64(len(usage))
+	}
+	return snapshot, nil
+}
+
 // ExportBackup returns a full in-memory snapshot of the control-plane state.
 func (s *MemoryStore) ExportBackup() (*BackupBundle, error) {
 	s.mu.RLock()

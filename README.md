@@ -107,7 +107,14 @@ Flags:
 - [控制中心 systemd 样例](docs/examples/control.service)
 - [节点 Agent systemd 样例](docs/examples/agent.service)
 - [nginx 反向代理样例](docs/examples/nginx-control.conf)
+- [Caddy 反向代理样例](docs/examples/Caddyfile)
 - [Prometheus 抓取样例](docs/examples/prometheus-scrape.yml)
+- [控制中心备份脚本模板](docs/examples/backup-control-plane.sh)
+- [控制中心恢复脚本模板](docs/examples/restore-control-plane.sh)
+- [控制中心备份 cron 样例](docs/examples/backup-control-plane.cron)
+- [控制中心恢复演练清单](docs/disaster-recovery-drill.md)
+- [控制中心发布升级 SOP](docs/release-upgrade-sop.md)
+- [控制中心回滚手册](docs/rollback-runbook.md)
 
 当前仓库也已经提供一个最小控制中心原型：
 

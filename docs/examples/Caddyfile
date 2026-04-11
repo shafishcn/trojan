@@ -1,0 +1,25 @@
+control.example.com {
+    encode zstd gzip
+
+    @metrics path /metrics
+    handle @metrics {
+        @allowed_ips remote_ip 127.0.0.1 10.0.0.0/8
+        handle @allowed_ips {
+            reverse_proxy 127.0.0.1:8081 {
+                header_up Authorization "Bearer metrics-secret"
+                header_up Host {host}
+                header_up X-Forwarded-Proto {scheme}
+                header_up X-Forwarded-For {remote_host}
+            }
+        }
+        respond "forbidden" 403
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8081 {
+            header_up Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+}

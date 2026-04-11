@@ -1,0 +1,8 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# 每天 03:15 导出控制中心备份，并保留最近 30 天
+15 3 * * * root export TROJAN_CONTROL_URL="https://control.example.com"; export TROJAN_CONTROL_TOKEN="your-super-admin-token"; export BACKUP_DIR="/var/backups/trojan-control"; flock -n /var/run/trojan-control-backup.lock /opt/trojan/docs/examples/backup-control-plane.sh >> /var/log/trojan-control-backup.log 2>&1 && find /var/backups/trojan-control -type f -name 'control-backup-*.json' -mtime +30 -delete
+
+# 每周日 04:00 做一次恢复演练提醒
+0 4 * * 0 root echo "[trojan-control] run disaster recovery drill checklist: /opt/trojan/docs/disaster-recovery-drill.md" >> /var/log/trojan-control-drill.log

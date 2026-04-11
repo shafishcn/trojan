@@ -14,12 +14,20 @@ import (
 
 // ServerOptions configures control-plane middleware such as auth.
 type ServerOptions struct {
-	ControlToken      string
-	AgentToken        string
-	ControlJWTSecret  string
-	ControlSessionTTL time.Duration
-	LoginRateLimit    int
-	AgentRateLimit    int
+	ControlToken              string
+	AgentToken                string
+	MetricsToken              string
+	ControlJWTSecret          string
+	ControlSessionTTL         time.Duration
+	LoginRateLimit            int
+	AgentRateLimit            int
+	AuditRetentionDays        int
+	TaskRetentionDays         int
+	UsageRetentionDays        int
+	CleanupInterval           time.Duration
+	NodeStaleMinutes          int
+	FailedTaskAlertThreshold  int
+	PendingTaskAlertThreshold int
 }
 
 // NewRouter creates the control-plane router.
@@ -34,6 +42,23 @@ func NewRouter(store Store, opts ...ServerOptions) *gin.Engine {
 	router.GET("/healthz", func(c *gin.Context) {
 		respond(c, http.StatusOK, "success", gin.H{"status": "ok"})
 	})
+	router.GET("/readyz", func(c *gin.Context) {
+		status, err := controlRuntimeStatus(store)
+		if err != nil || !status.Healthy {
+			respond(c, http.StatusServiceUnavailable, "not ready", status)
+			return
+		}
+		respond(c, http.StatusOK, "ready", status)
+	})
+	router.GET("/metrics", metricsAuthMiddleware(option.MetricsToken), func(c *gin.Context) {
+		snapshot, err := controlMetricsSnapshot(store)
+		statusCode := http.StatusOK
+		if err != nil || snapshot == nil || !snapshot.Healthy {
+			statusCode = http.StatusServiceUnavailable
+		}
+		c.Header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		c.String(statusCode, renderPrometheusMetrics(snapshot))
+	})
 
 	agentLimiter := newFixedWindowLimiter(resolveRateLimitPerMinute(option.AgentRateLimit, 600), time.Minute)
 
@@ -47,6 +72,42 @@ func NewRouter(store Store, opts ...ServerOptions) *gin.Engine {
 				return
 			}
 			respond(c, http.StatusOK, "success", gin.H{"nodes": nodes})
+		})
+
+		admin.GET("/runtime/status", requireControlRole("viewer"), func(c *gin.Context) {
+			status, err := controlRuntimeStatus(store)
+			if err != nil && status == nil {
+				respond(c, http.StatusInternalServerError, err.Error(), nil)
+				return
+			}
+			respond(c, http.StatusOK, "success", gin.H{
+				"runtime": status,
+				"config": gin.H{
+					"controlAuthEnabled":        option.ControlJWTSecret != "" || option.ControlToken != "",
+					"jwtEnabled":                option.ControlJWTSecret != "",
+					"tokenFallback":             option.ControlToken != "",
+					"agentTokenEnabled":         option.AgentToken != "",
+					"metricsTokenEnabled":       option.MetricsToken != "",
+					"loginRateLimit":            resolveRateLimitPerMinute(option.LoginRateLimit, 30),
+					"agentRateLimit":            resolveRateLimitPerMinute(option.AgentRateLimit, 600),
+					"auditRetentionDays":        option.AuditRetentionDays,
+					"taskRetentionDays":         option.TaskRetentionDays,
+					"usageRetentionDays":        option.UsageRetentionDays,
+					"cleanupIntervalSec":        int(option.CleanupInterval.Seconds()),
+					"nodeStaleMinutes":          option.NodeStaleMinutes,
+					"failedTaskAlertThreshold":  option.FailedTaskAlertThreshold,
+					"pendingTaskAlertThreshold": option.PendingTaskAlertThreshold,
+				},
+			})
+		})
+
+		admin.GET("/alerts/summary", requireControlRole("viewer"), func(c *gin.Context) {
+			summary, err := controlAlertSummary(store, option)
+			if err != nil {
+				respond(c, http.StatusInternalServerError, err.Error(), nil)
+				return
+			}
+			respond(c, http.StatusOK, "success", summary)
 		})
 
 		admin.POST("/nodes/:nodeKey/agent-secret/rotate", requireControlRole("admin"), func(c *gin.Context) {
@@ -885,6 +946,26 @@ func bearerAuthMiddleware(expectedToken string) gin.HandlerFunc {
 		if token != expectedToken {
 			respond(c, http.StatusUnauthorized, "invalid bearer token", nil)
 			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func metricsAuthMiddleware(expectedToken string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if expectedToken == "" {
+			c.Next()
+			return
+		}
+		authHeader := c.GetHeader("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		if token != expectedToken {
+			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 		c.Next()

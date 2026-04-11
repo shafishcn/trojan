@@ -110,6 +110,50 @@ type BackupNode struct {
 	AgentSecretHash string `json:"agentSecretHash,omitempty"`
 }
 
+// RuntimeStatus summarizes current control-plane health and runtime metadata.
+type RuntimeStatus struct {
+	Backend   string                 `json:"backend"`
+	Healthy   bool                   `json:"healthy"`
+	CheckedAt time.Time              `json:"checkedAt"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+}
+
+// AlertSummary is a derived operational alert view for the control plane.
+type AlertSummary struct {
+	Status     string                 `json:"status"`
+	CheckedAt  time.Time              `json:"checkedAt"`
+	Thresholds map[string]interface{} `json:"thresholds"`
+	Issues     []AlertIssue           `json:"issues"`
+}
+
+// AlertIssue describes one active operational issue.
+type AlertIssue struct {
+	Severity string                 `json:"severity"`
+	Kind     string                 `json:"kind"`
+	Message  string                 `json:"message"`
+	Count    int                    `json:"count"`
+	Details  map[string]interface{} `json:"details,omitempty"`
+}
+
+// MetricsSnapshot is the normalized control-plane metric set.
+type MetricsSnapshot struct {
+	Backend            string    `json:"backend"`
+	Healthy            bool      `json:"healthy"`
+	CheckedAt          time.Time `json:"checkedAt"`
+	NodeCount          int64     `json:"nodeCount"`
+	ActiveNodeCount    int64     `json:"activeNodeCount"`
+	UserCount          int64     `json:"userCount"`
+	AdminCount         int64     `json:"adminCount"`
+	TaskCount          int64     `json:"taskCount"`
+	TaskPendingCount   int64     `json:"taskPendingCount"`
+	TaskRunningCount   int64     `json:"taskRunningCount"`
+	TaskSucceededCount int64     `json:"taskSucceededCount"`
+	TaskFailedCount    int64     `json:"taskFailedCount"`
+	TaskEventCount     int64     `json:"taskEventCount"`
+	AuditLogCount      int64     `json:"auditLogCount"`
+	UsageCount         int64     `json:"usageCount"`
+}
+
 // StartTaskRequest marks a task as running for a node.
 type StartTaskRequest struct {
 	NodeKey        string `json:"nodeKey" binding:"required"`

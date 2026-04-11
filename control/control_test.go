@@ -1103,6 +1103,208 @@ func TestControlUIRoute(t *testing.T) {
 	}
 }
 
+func TestReadyzAndRuntimeStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	store := NewMemoryStore()
+	if _, err := store.EnsureControlAdmin(EnsureControlAdminRequest{
+		Username: "root",
+		Password: "root-pass",
+		Role:     "super_admin",
+	}); err != nil {
+		t.Fatalf("EnsureControlAdmin(root) error = %v", err)
+	}
+	router := NewRouter(store, ServerOptions{
+		ControlJWTSecret:   "jwt-secret",
+		LoginRateLimit:     15,
+		AgentRateLimit:     120,
+		AuditRetentionDays: 90,
+		TaskRetentionDays:  30,
+		UsageRetentionDays: 14,
+		CleanupInterval:    45 * time.Minute,
+	})
+
+	readyResp := performJSONRequest(t, router, http.MethodGet, "/readyz", nil)
+	if readyResp.Code != http.StatusOK {
+		t.Fatalf("readyz status = %d, want %d", readyResp.Code, http.StatusOK)
+	}
+
+	rootToken := loginForToken(t, router, "root", "root-pass")
+	runtimeResp := performJSONRequestWithHeaders(t, router, http.MethodGet, "/api/control/runtime/status", nil, map[string]string{
+		"Authorization": "Bearer " + rootToken,
+	})
+	if runtimeResp.Code != http.StatusOK {
+		t.Fatalf("runtime status code = %d, want %d", runtimeResp.Code, http.StatusOK)
+	}
+
+	var body ResponseBody
+	if err := json.Unmarshal(runtimeResp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("runtime json.Unmarshal() error = %v", err)
+	}
+	data, ok := body.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("runtime body.Data type = %T", body.Data)
+	}
+	runtimeData, ok := data["runtime"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("runtime data type = %T", data["runtime"])
+	}
+	if backend, _ := runtimeData["backend"].(string); backend != "memory" {
+		t.Fatalf("runtime backend = %#v, want memory", runtimeData["backend"])
+	}
+	if healthy, _ := runtimeData["healthy"].(bool); !healthy {
+		t.Fatalf("runtime healthy = %#v, want true", runtimeData["healthy"])
+	}
+	configData, ok := data["config"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("config data type = %T", data["config"])
+	}
+	if secs, _ := configData["cleanupIntervalSec"].(float64); int(secs) != 2700 {
+		t.Fatalf("cleanupIntervalSec = %#v, want 2700", configData["cleanupIntervalSec"])
+	}
+}
+
+func TestMetricsEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	store := NewMemoryStore()
+	if _, err := store.RegisterNode(RegisterNodeRequest{
+		NodeKey: "node-metrics",
+		Name:    "metrics-node",
+	}); err != nil {
+		t.Fatalf("RegisterNode() error = %v", err)
+	}
+	if _, err := store.Heartbeat(HeartbeatRequest{
+		NodeKey: "node-metrics",
+	}); err != nil {
+		t.Fatalf("Heartbeat() error = %v", err)
+	}
+	if _, err := store.CreateUser(CreateUserRequest{
+		Username: "alice",
+		Password: "YWxpY2UtcGFzcw==",
+	}); err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if _, err := store.EnsureControlAdmin(EnsureControlAdminRequest{
+		Username: "root",
+		Password: "root-pass",
+		Role:     "super_admin",
+	}); err != nil {
+		t.Fatalf("EnsureControlAdmin() error = %v", err)
+	}
+	if _, err := store.CreateTask(CreateTaskRequest{
+		NodeKey:  "node-metrics",
+		TaskType: "sync_users",
+	}); err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
+	}
+
+	router := NewRouter(store, ServerOptions{MetricsToken: "metrics-secret"})
+
+	unauthorizedResp := performJSONRequest(t, router, http.MethodGet, "/metrics", nil)
+	if unauthorizedResp.Code != http.StatusUnauthorized {
+		t.Fatalf("metrics without token status = %d, want %d", unauthorizedResp.Code, http.StatusUnauthorized)
+	}
+
+	metricsResp := performJSONRequestWithHeaders(t, router, http.MethodGet, "/metrics", nil, map[string]string{
+		"Authorization": "Bearer metrics-secret",
+	})
+	if metricsResp.Code != http.StatusOK {
+		t.Fatalf("metrics with token status = %d, want %d", metricsResp.Code, http.StatusOK)
+	}
+	body := metricsResp.Body.String()
+	if !strings.Contains(body, "trojan_control_up 1") {
+		t.Fatalf("metrics missing health gauge: %s", body)
+	}
+	if !strings.Contains(body, "trojan_control_store_info{backend=\"memory\"} 1") {
+		t.Fatalf("metrics missing backend gauge: %s", body)
+	}
+	if !strings.Contains(body, "trojan_control_nodes_total 1") {
+		t.Fatalf("metrics missing node count: %s", body)
+	}
+	if !strings.Contains(body, "trojan_control_users_total 1") {
+		t.Fatalf("metrics missing user count: %s", body)
+	}
+	if !strings.Contains(body, "trojan_control_tasks_total{status=\"pending\"} 1") {
+		t.Fatalf("metrics missing pending task count: %s", body)
+	}
+}
+
+func TestAlertsSummary(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	store := NewMemoryStore()
+	if _, err := store.EnsureControlAdmin(EnsureControlAdminRequest{
+		Username: "root",
+		Password: "root-pass",
+		Role:     "super_admin",
+	}); err != nil {
+		t.Fatalf("EnsureControlAdmin() error = %v", err)
+	}
+	if _, err := store.RegisterNode(RegisterNodeRequest{
+		NodeKey: "node-alert",
+		Name:    "alert-node",
+	}); err != nil {
+		t.Fatalf("RegisterNode() error = %v", err)
+	}
+	task, err := store.CreateTask(CreateTaskRequest{
+		NodeKey:  "node-alert",
+		TaskType: "sync_users",
+	})
+	if err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
+	}
+	if _, err := store.StartTask(task.ID, StartTaskRequest{
+		NodeKey:        "node-alert",
+		ExecutionToken: "alert-exec",
+	}); err != nil {
+		t.Fatalf("StartTask() error = %v", err)
+	}
+	if _, err := store.FinishTask(task.ID, FinishTaskRequest{
+		NodeKey:        "node-alert",
+		ExecutionToken: "alert-exec",
+		Success:        false,
+		Message:        "boom",
+	}); err != nil {
+		t.Fatalf("FinishTask() error = %v", err)
+	}
+	store.mu.Lock()
+	node := store.nodes["node-alert"]
+	node.LastSeenAt = time.Now().Add(-15 * time.Minute)
+	store.mu.Unlock()
+
+	router := NewRouter(store, ServerOptions{
+		ControlJWTSecret:          "jwt-secret",
+		NodeStaleMinutes:          10,
+		FailedTaskAlertThreshold:  1,
+		PendingTaskAlertThreshold: 10,
+	})
+	rootToken := loginForToken(t, router, "root", "root-pass")
+
+	resp := performJSONRequestWithHeaders(t, router, http.MethodGet, "/api/control/alerts/summary", nil, map[string]string{
+		"Authorization": "Bearer " + rootToken,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("alerts summary status = %d, want %d", resp.Code, http.StatusOK)
+	}
+
+	var body ResponseBody
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	summary, ok := body.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("body.Data type = %T", body.Data)
+	}
+	if status, _ := summary["status"].(string); status != "alert" {
+		t.Fatalf("summary status = %#v, want alert", summary["status"])
+	}
+	issues, ok := summary["issues"].([]interface{})
+	if !ok || len(issues) < 2 {
+		t.Fatalf("issues = %#v, want stale_nodes and failed_tasks", summary["issues"])
+	}
+}
+
 func performJSONRequest(t *testing.T, router *gin.Engine, method string, target string, body interface{}) *httptest.ResponseRecorder {
 	return performJSONRequestWithHeaders(t, router, method, target, body, nil)
 }
