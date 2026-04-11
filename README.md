@@ -103,15 +103,20 @@ Flags:
 
 - [多节点统一管理设计草案](docs/multi-node-control-plane.md)
 - [多节点控制中心 MySQL 初版表结构](docs/multi-node-schema.sql)
+- [多节点控制中心生产部署指南](docs/production-deployment.md)
+- [控制中心 systemd 样例](docs/examples/control.service)
+- [节点 Agent systemd 样例](docs/examples/agent.service)
+- [nginx 反向代理样例](docs/examples/nginx-control.conf)
+- [Prometheus 抓取样例](docs/examples/prometheus-scrape.yml)
 
 当前仓库也已经提供一个最小控制中心原型：
 
 ```bash
 # 内存版
-go run . control --host 0.0.0.0 --port 8081 --admin-user admin --admin-pass change-me --agent-token agent-secret --login-rate-limit 30 --agent-rate-limit 600 --audit-retention-days 90 --task-retention-days 30 --usage-retention-days 30
+go run . control --host 0.0.0.0 --port 8081 --admin-user admin --admin-pass change-me --agent-token agent-secret --metrics-token metrics-secret --login-rate-limit 30 --agent-rate-limit 600 --audit-retention-days 90 --task-retention-days 30 --usage-retention-days 30
 
 # MySQL版
-go run . control --store mysql --dsn 'root:pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true' --admin-user admin --admin-pass change-me --agent-token agent-secret --login-rate-limit 30 --agent-rate-limit 600 --audit-retention-days 90 --task-retention-days 30 --usage-retention-days 30
+go run . control --store mysql --dsn 'root:pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true' --admin-user admin --admin-pass change-me --agent-token agent-secret --metrics-token metrics-secret --login-rate-limit 30 --agent-rate-limit 600 --audit-retention-days 90 --task-retention-days 30 --usage-retention-days 30
 
 # 节点 agent
 go run . agent --control-url http://127.0.0.1:8081 --token agent-secret --node-secret node-secret-001 --node-key node-01 --name tokyo-01 --domain hk.example.com --port 443
@@ -119,7 +124,11 @@ go run . agent --control-url http://127.0.0.1:8081 --token agent-secret --node-s
 
 控制中心新增的多节点用户接口包括：
 
+- `GET /readyz`
+- `GET /metrics`
 - `GET /api/control/overview`
+- `GET /api/control/runtime/status`
+- `GET /api/control/alerts/summary`
 - `GET/POST /api/control/users`
 - `GET/DELETE /api/control/users/:username`
 - `POST /api/control/users/:username/bindings`
@@ -154,6 +163,9 @@ go run . agent --control-url http://127.0.0.1:8081 --token agent-secret --node-s
 - 任务列表和审计日志支持 `offset + limit` 分页
 - 启动后支持按保留天数自动清理审计日志、已完成任务/事件和 usage 快照，也支持手动触发清理
 - 支持 `super_admin` 导出和导入控制中心备份，覆盖管理员、节点、用户、绑定、任务、审计和 usage 状态
+- 提供 `/readyz` 就绪探针和运行状态接口，便于接入反向代理、容器健康检查和监控
+- 提供 Prometheus 风格 `/metrics` 指标接口，可用独立 `metrics token` 保护
+- 提供告警摘要接口，可基于节点失联、失败任务和待处理积压做最小告警判定
 - 节点、用户、任务总览
 - 任务状态筛选
 - 单任务详情和审计事件时间线

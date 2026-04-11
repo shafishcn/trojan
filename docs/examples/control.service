@@ -1,0 +1,35 @@
+[Unit]
+Description=Trojan Control Plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/trojan
+EnvironmentFile=/etc/trojan-control.env
+ExecStart=/opt/trojan/trojan control \
+  --host 127.0.0.1 \
+  --port 8081 \
+  --store mysql \
+  --dsn ${TROJAN_CONTROL_DSN} \
+  --admin-user ${TROJAN_ADMIN_USER} \
+  --admin-pass ${TROJAN_ADMIN_PASS} \
+  --jwt-secret ${TROJAN_JWT_SECRET} \
+  --agent-token ${TROJAN_AGENT_TOKEN} \
+  --metrics-token ${TROJAN_METRICS_TOKEN} \
+  --login-rate-limit 30 \
+  --agent-rate-limit 600 \
+  --audit-retention-days 90 \
+  --task-retention-days 30 \
+  --usage-retention-days 30 \
+  --cleanup-interval-minutes 60 \
+  --node-stale-minutes 10 \
+  --failed-task-alert-threshold 1 \
+  --pending-task-alert-threshold 20
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

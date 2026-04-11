@@ -1,0 +1,24 @@
+[Unit]
+Description=Trojan Node Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/trojan
+EnvironmentFile=/etc/trojan-agent.env
+ExecStart=/opt/trojan/trojan agent \
+  --control-url ${TROJAN_CONTROL_URL} \
+  --token ${TROJAN_AGENT_TOKEN} \
+  --node-secret ${TROJAN_NODE_SECRET} \
+  --node-key ${TROJAN_NODE_KEY} \
+  --name ${TROJAN_NODE_NAME} \
+  --domain ${TROJAN_NODE_DOMAIN} \
+  --port ${TROJAN_NODE_PORT}
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
