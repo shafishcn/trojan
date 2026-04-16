@@ -1,2 +1,6 @@
 .vscode
 .idea
+.DS_Store
+coverage.out
+AGENTS.md
+GO_LEARNING_NOTES.md
