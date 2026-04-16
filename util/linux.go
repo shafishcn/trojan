@@ -14,10 +14,34 @@ import (
 	"time"
 )
 
+var publicIPProviders = []string{
+	"http://api.ipify.org",
+	"http://icanhazip.com",
+}
+
+func fetchPublicIP(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(body)), nil
+}
+
 // PortIsUse 判断端口是否占用
 func PortIsUse(port int) bool {
 	_, tcpError := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), time.Millisecond*50)
-	udpAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", port))
+	udpAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return tcpError == nil
+	}
 	udpConn, udpError := net.ListenUDP("udp", udpAddr)
 	if udpConn != nil {
 		defer udpConn.Close()
@@ -49,16 +73,13 @@ func IsExists(path string) bool {
 
 // GetLocalIP 获取本机ipv4地址
 func GetLocalIP() string {
-	resp, err := http.Get("http://api.ipify.org")
-	if err != nil {
-		resp, err = http.Get("http://icanhazip.com")
-		if err != nil {
-			return ""
+	for _, provider := range publicIPProviders {
+		ip, err := fetchPublicIP(provider)
+		if err == nil && ip != "" {
+			return ip
 		}
 	}
-	defer resp.Body.Close()
-	s, _ := io.ReadAll(resp.Body)
-	return strings.TrimSpace(string(s))
+	return ""
 }
 
 // InstallPack 安装指定名字软件
@@ -91,7 +112,11 @@ func OpenPort(port int) {
 
 // Log 实时打印指定服务日志
 func Log(serviceName string, line int) {
-	result, _ := LogChan(serviceName, line, make(chan byte))
+	result, err := LogChan(serviceName, line, make(chan byte))
+	if err != nil {
+		fmt.Println("Error:The command is err: ", err.Error())
+		return
+	}
 	for line := range result {
 		fmt.Println(line)
 	}
@@ -109,7 +134,10 @@ func journalctlArgs(serviceName string, line int) []string {
 func LogChan(serviceName string, line int, closeChan chan byte) (chan string, error) {
 	cmd := exec.Command("journalctl", journalctlArgs(serviceName, line)...)
 
-	stdout, _ := cmd.StdoutPipe()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
 
 	if err := cmd.Start(); err != nil {
 		fmt.Println("Error:The command is err: ", err.Error())
@@ -123,11 +151,14 @@ func LogChan(serviceName string, line int, closeChan chan byte) (chan string, er
 		for stdoutScan.Scan() {
 			select {
 			case <-closeChan:
-				stdout.Close()
+				_ = stdout.Close()
 				return
 			default:
 				ch <- stdoutScan.Text()
 			}
+		}
+		if err := stdoutScan.Err(); err != nil {
+			fmt.Println("Error:The command is err: ", err.Error())
 		}
 	}()
 	return ch, nil

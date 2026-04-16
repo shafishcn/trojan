@@ -15,6 +15,7 @@ import (
 
 //go:embed templates/*
 var f embed.FS
+var templateFS fs.FS = f
 
 func userRouter(router *gin.Engine) {
 	user := router.Group("/trojan/user")
@@ -204,12 +205,18 @@ func commonRouter(router *gin.Engine) {
 }
 
 func staticRouter(router *gin.Engine) {
-	staticFs, _ := fs.Sub(f, "templates/static")
-	router.StaticFS("/static", http.FS(staticFs))
+	staticFs, err := fs.Sub(templateFS, "templates/static")
+	if err == nil {
+		router.StaticFS("/static", http.FS(staticFs))
+	}
 
 	router.GET("/", func(c *gin.Context) {
-		indexHTML, _ := f.ReadFile("templates/" + "index.html")
-		c.Writer.Write(indexHTML)
+		indexHTML, err := fs.ReadFile(templateFS, "templates/index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "failed to load index page")
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML)
 	})
 }
 

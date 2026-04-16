@@ -13,8 +13,8 @@ import (
 	"strconv"
 
 	// mysql sql驱动
-	mysqlDriver "github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
+	mysqlDriver "github.com/go-sql-driver/mysql"
 )
 
 // Mysql 结构体
@@ -71,10 +71,13 @@ var (
 	mysqlDB   *sql.DB
 	mysqlOnce sync.Once
 	mysqlDSN  string
+	mysqlMu   sync.Mutex
 )
 
 // GetDB 获取mysql数据库连接(连接池复用)
 func (mysql *Mysql) GetDB() *sql.DB {
+	mysqlMu.Lock()
+	defer mysqlMu.Unlock()
 	// 屏蔽mysql驱动包的日志输出
 	mysqlDriver.SetLogger(log.New(io.Discard, "", 0))
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mysql.Username, mysql.Password, mysql.ServerAddr, mysql.ServerPort, mysql.Database)
@@ -99,6 +102,28 @@ func (mysql *Mysql) GetDB() *sql.DB {
 		mysqlDSN = dsn
 	})
 	return mysqlDB
+}
+
+// SetTestDB 设置测试用的 Mock 数据库连接
+func SetTestDB(db *sql.DB) {
+	mysqlMu.Lock()
+	defer mysqlMu.Unlock()
+	mysqlDB = db
+	mysqlDSN = ":@tcp(:0)/"
+	mysqlOnce = sync.Once{}
+	mysqlOnce.Do(func() {}) // 占位标记已初始化，防止被重写
+}
+
+// ResetTestDB 重置测试注入的数据库连接
+func ResetTestDB() {
+	mysqlMu.Lock()
+	defer mysqlMu.Unlock()
+	if mysqlDB != nil {
+		_ = mysqlDB.Close()
+	}
+	mysqlDB = nil
+	mysqlDSN = ""
+	mysqlOnce = sync.Once{}
 }
 
 // CreateTable 不存在trojan user表则自动创建

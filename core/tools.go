@@ -11,6 +11,11 @@ import (
 	"trojan/util"
 )
 
+func escapeSQLString(value string) string {
+	value = strings.ReplaceAll(value, "\\", "\\\\")
+	return strings.ReplaceAll(value, "'", "''")
+}
+
 // UpgradeDB 升级数据库表结构以及迁移数据
 func (mysql *Mysql) UpgradeDB() error {
 	db := mysql.GetDB()
@@ -43,6 +48,8 @@ func (mysql *Mysql) UpgradeDB() error {
 				DelValue(fmt.Sprintf("%s_pass", user.Username))
 			}
 		}
+	} else if err != nil {
+		return err
 	}
 	err = db.QueryRow("SHOW COLUMNS FROM users LIKE 'useDays'").Scan(&field, &colType, &colNull, &colKey, &colDefault, &colExtra)
 	if err == sql.ErrNoRows {
@@ -55,15 +62,32 @@ ADD COLUMN expiryDate char(10) DEFAULT '';
 			fmt.Println(err)
 			return err
 		}
+	} else if err != nil {
+		return err
 	}
 	var tableName sql.NullString
 	err = db.QueryRow("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_NAME = 'users' AND TABLE_SCHEMA = ? AND TABLE_COLLATION LIKE 'utf8%'",
 		mysql.Database).Scan(&tableName)
 	if err == sql.ErrNoRows {
-		tempFile := "temp.sql"
-		mysql.DumpSql(tempFile)
-		mysql.ExecSql(tempFile)
-		os.Remove(tempFile)
+		tempFile, createErr := os.CreateTemp("", "trojan-upgrade-*.sql")
+		if createErr != nil {
+			return createErr
+		}
+		tempPath := tempFile.Name()
+		if closeErr := tempFile.Close(); closeErr != nil {
+			_ = os.Remove(tempPath)
+			return closeErr
+		}
+		defer os.Remove(tempPath)
+
+		if err := mysql.DumpSql(tempPath); err != nil {
+			return fmt.Errorf("dump sql for utf8 migration: %w", err)
+		}
+		if err := mysql.ExecSql(tempPath); err != nil {
+			return fmt.Errorf("replay sql for utf8 migration: %w", err)
+		}
+	} else if err != nil {
+		return err
 	}
 	return nil
 }
@@ -89,11 +113,17 @@ func (mysql *Mysql) DumpSql(filePath string) error {
 	for _, user := range userList {
 		writer.WriteString(fmt.Sprintf(`
 INSERT INTO users(username, password, passwordShow, quota, download, upload, useDays, expiryDate) VALUES ('%s','%s','%s', %d, %d, %d, %d, '%s');`,
-			user.Username, user.EncryptPass, user.Password, user.Quota, user.Download, user.Upload, user.UseDays, user.ExpiryDate))
+			escapeSQLString(user.Username),
+			escapeSQLString(user.EncryptPass),
+			escapeSQLString(user.Password),
+			user.Quota,
+			user.Download,
+			user.Upload,
+			user.UseDays,
+			escapeSQLString(user.ExpiryDate)))
 	}
 	writer.WriteString("\n")
-	writer.Flush()
-	return nil
+	return writer.Flush()
 }
 
 // ExecSql 执行sql

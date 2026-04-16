@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 func systemctlReplace(out string) (bool, error) {
@@ -27,7 +28,9 @@ func systemctlReplace(out string) (bool, error) {
 
 func systemctlBase(name, operate string) (string, error) {
 	out, err := exec.Command("bash", "-c", fmt.Sprintf("systemctl %s %s", operate, name)).CombinedOutput()
-	if v, _ := systemctlReplace(string(out)); v {
+	if v, replaceErr := systemctlReplace(string(out)); replaceErr != nil {
+		return string(out), replaceErr
+	} else if v {
 		out, err = exec.Command("bash", "-c", fmt.Sprintf("systemctl %s %s", operate, name)).CombinedOutput()
 	}
 	return string(out), err
@@ -93,60 +96,84 @@ func RunWebShell(webShellPath string) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		fmt.Println("request shell failed:", resp.Status)
+		return
+	}
 	installShell, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
-	ExecCommand(string(installShell))
+	if err := ExecCommand(string(installShell)); err != nil {
+		fmt.Println(err.Error())
+	}
 }
 
 // ExecCommand 运行命令并实时查看运行结果
 func ExecCommand(command string) error {
 	cmd := exec.Command("bash", "-c", command)
 
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
 
 	if err := cmd.Start(); err != nil {
 		fmt.Println("Error:The command is err: ", err.Error())
 		return err
 	}
 	ch := make(chan string, 100)
-	errCh := make(chan error, 1)
+	scanErrCh := make(chan error, 2)
+	var wg sync.WaitGroup
 	stdoutScan := bufio.NewScanner(stdout)
 	stderrScan := bufio.NewScanner(stderr)
-	go func() {
-		for stdoutScan.Scan() {
-			line := stdoutScan.Text()
-			ch <- line
+
+	scanPipe := func(scanner *bufio.Scanner) {
+		defer wg.Done()
+		for scanner.Scan() {
+			ch <- scanner.Text()
 		}
-	}()
-	go func() {
-		for stderrScan.Scan() {
-			line := stderrScan.Text()
-			ch <- line
+		if err := scanner.Err(); err != nil {
+			scanErrCh <- err
 		}
-	}()
+	}
+
+	wg.Add(2)
+	go scanPipe(stdoutScan)
+	go scanPipe(stderrScan)
 	go func() {
-		err := cmd.Wait()
-		if err != nil && !strings.Contains(err.Error(), "exit status") {
-			fmt.Println("wait:", err.Error())
-		}
+		wg.Wait()
 		close(ch)
-		errCh <- err
+		close(scanErrCh)
 	}()
 	for line := range ch {
 		fmt.Println(line)
 	}
-	return <-errCh
+	waitErr := cmd.Wait()
+	if waitErr != nil && !strings.Contains(waitErr.Error(), "exit status") {
+		fmt.Println("wait:", waitErr.Error())
+	}
+	for err := range scanErrCh {
+		if err != nil {
+			return err
+		}
+	}
+	return waitErr
 }
 
 // ExecCommandWithResult 运行命令并获取结果
 func ExecCommandWithResult(command string) string {
 	out, err := exec.Command("bash", "-c", command).CombinedOutput()
 	if strings.Contains(command, "systemctl") {
-		if v, _ := systemctlReplace(string(out)); v {
+		if v, replaceErr := systemctlReplace(string(out)); replaceErr != nil {
+			fmt.Println("err: " + replaceErr.Error())
+			return ""
+		} else if v {
 			out, err = exec.Command("bash", "-c", command).CombinedOutput()
 		}
 	}

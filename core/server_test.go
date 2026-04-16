@@ -88,4 +88,49 @@ func TestServerConfig_LoadAndSave(t *testing.T) {
 			t.Errorf("Load(non-existent) = %v, want nil", data)
 		}
 	})
+
+	t.Run("GetConfig returns zero value config for missing file", func(t *testing.T) {
+		oldPath := configPath
+		t.Cleanup(func() {
+			SetConfigPath(oldPath)
+		})
+		SetConfigPath(filepath.Join(tmpDir, "missing.json"))
+
+		config := GetConfig()
+		if config == nil {
+			t.Fatal("GetConfig() returned nil")
+		}
+		if config.Mysql.Enabled {
+			t.Errorf("Mysql.Enabled = %v, want false", config.Mysql.Enabled)
+		}
+	})
+
+	t.Run("WriteDomain creates config file from empty state", func(t *testing.T) {
+		target := filepath.Join(tmpDir, "empty.json")
+		oldPath := configPath
+		t.Cleanup(func() {
+			SetConfigPath(oldPath)
+		})
+		SetConfigPath(target)
+
+		if !WriteDomain("example.com") {
+			t.Fatal("WriteDomain() returned false")
+		}
+
+		data := Load(target)
+		if data == nil {
+			t.Fatal("Load() returned nil")
+		}
+		var config map[string]interface{}
+		if err := json.Unmarshal(data, &config); err != nil {
+			t.Fatalf("json.Unmarshal() error = %v", err)
+		}
+		ssl, ok := config["ssl"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("ssl = %T, want object", config["ssl"])
+		}
+		if ssl["sni"] != "example.com" {
+			t.Errorf("ssl.sni = %v, want example.com", ssl["sni"])
+		}
+	})
 }

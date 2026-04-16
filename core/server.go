@@ -10,6 +10,11 @@ import (
 
 var configPath = "/usr/local/etc/trojan/config.json"
 
+// SetConfigPath 设置配置文件路径（用于测试）
+func SetConfigPath(path string) {
+	configPath = path
+}
+
 // ServerConfig 结构体
 type ServerConfig struct {
 	Config
@@ -48,10 +53,21 @@ func Load(path string) []byte {
 	return data
 }
 
+func loadConfigData(path string) []byte {
+	data := Load(path)
+	if len(data) == 0 {
+		return []byte("{}")
+	}
+	return data
+}
+
 // Save 保存服务端配置文件
 func Save(data []byte, path string) bool {
 	if path == "" {
 		path = configPath
+	}
+	if len(data) == 0 {
+		data = []byte("{}")
 	}
 	if err := os.WriteFile(path, pretty.Pretty(data), 0600); err != nil {
 		fmt.Println(err)
@@ -62,31 +78,35 @@ func Save(data []byte, path string) bool {
 
 // GetConfig 获取config配置
 func GetConfig() *ServerConfig {
-	data := Load("")
+	data := loadConfigData("")
 	config := ServerConfig{}
 	if err := json.Unmarshal(data, &config); err != nil {
 		fmt.Println(err)
-		return nil
+		return &ServerConfig{}
 	}
 	return &config
 }
 
 // GetMysql 获取mysql连接
 func GetMysql() *Mysql {
-	return &GetConfig().Mysql
+	config := GetConfig()
+	if config == nil {
+		return &Mysql{}
+	}
+	return &config.Mysql
 }
 
 // WriteMysql 写mysql配置
 func WriteMysql(mysql *Mysql) bool {
 	mysql.Enabled = true
-	data := Load("")
+	data := loadConfigData("")
 	result, _ := sjson.SetBytes(data, "mysql", mysql)
 	return Save(result, "")
 }
 
 // WriteTls 写tls配置
 func WriteTls(cert, key, domain string) bool {
-	data := Load("")
+	data := loadConfigData("")
 	data, _ = sjson.SetBytes(data, "ssl.cert", cert)
 	data, _ = sjson.SetBytes(data, "ssl.key", key)
 	data, _ = sjson.SetBytes(data, "ssl.sni", domain)
@@ -95,28 +115,28 @@ func WriteTls(cert, key, domain string) bool {
 
 // WriteDomain 写域名
 func WriteDomain(domain string) bool {
-	data := Load("")
+	data := loadConfigData("")
 	data, _ = sjson.SetBytes(data, "ssl.sni", domain)
 	return Save(data, "")
 }
 
 // WritePassword 写密码
 func WritePassword(pass []string) bool {
-	data := Load("")
+	data := loadConfigData("")
 	data, _ = sjson.SetBytes(data, "password", pass)
 	return Save(data, "")
 }
 
 // WritePort 写trojan端口
 func WritePort(port int) bool {
-	data := Load("")
+	data := loadConfigData("")
 	data, _ = sjson.SetBytes(data, "local_port", port)
 	return Save(data, "")
 }
 
 // WriteLogLevel 写日志等级
 func WriteLogLevel(level int) bool {
-	data := Load("")
+	data := loadConfigData("")
 	data, _ = sjson.SetBytes(data, "log_level", level)
 	return Save(data, "")
 }

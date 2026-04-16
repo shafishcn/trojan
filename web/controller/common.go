@@ -7,6 +7,7 @@ import (
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
+	"sync"
 	"time"
 	"trojan/asset"
 	"trojan/core"
@@ -26,6 +27,7 @@ type speedInfo struct {
 }
 
 var si *speedInfo
+var siMu sync.RWMutex
 
 // TimeCost web函数执行用时统计方法
 func TimeCost(start time.Time, body *ResponseBody) {
@@ -33,11 +35,21 @@ func TimeCost(start time.Time, body *ResponseBody) {
 }
 
 func clashRules() string {
-	rules, _ := core.GetValue("clash-rules")
-	if rules == "" {
-		rules = string(asset.GetAsset("clash-rules.yaml"))
+	rules, err := core.GetValue("clash-rules")
+	if err == nil && rules != "" {
+		return rules
 	}
-	return rules
+	return string(asset.GetAsset("clash-rules.yaml"))
+}
+
+func getSpeedInfo() *speedInfo {
+	siMu.RLock()
+	defer siMu.RUnlock()
+	if si == nil {
+		return &speedInfo{}
+	}
+	result := *si
+	return &result
 }
 
 // Version 获取版本信息
@@ -79,7 +91,9 @@ func SetDomain(domain string) *ResponseBody {
 func SetClashRules(rules string) *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
-	core.SetValue("clash-rules", rules)
+	if err := core.SetValue("clash-rules", rules); err != nil {
+		responseBody.Msg = err.Error()
+	}
 	return &responseBody
 }
 
@@ -87,7 +101,9 @@ func SetClashRules(rules string) *ResponseBody {
 func ResetClashRules() *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
-	core.DelValue("clash-rules")
+	if err := core.DelValue("clash-rules"); err != nil {
+		responseBody.Msg = err.Error()
+	}
 	responseBody.Data = clashRules()
 	return &responseBody
 }
@@ -115,26 +131,38 @@ func SetTrojanType(tType string) *ResponseBody {
 func CollectTask() {
 	var recvCount, sentCount uint64
 	c := cron.New()
-	lastIO, _ := net.IOCounters(true)
+	lastIO, err := net.IOCounters(true)
 	var lastRecvCount, lastSentCount uint64
-	for _, k := range lastIO {
-		lastRecvCount = lastRecvCount + k.BytesRecv
-		lastSentCount = lastSentCount + k.BytesSent
+	if err == nil {
+		for _, k := range lastIO {
+			lastRecvCount = lastRecvCount + k.BytesRecv
+			lastSentCount = lastSentCount + k.BytesSent
+		}
 	}
+	siMu.Lock()
 	si = &speedInfo{}
-	c.AddFunc("@every 2s", func() {
-		result, _ := net.IOCounters(true)
+	siMu.Unlock()
+	_, err = c.AddFunc("@every 2s", func() {
+		result, err := net.IOCounters(true)
+		if err != nil {
+			return
+		}
 		recvCount, sentCount = 0, 0
 		for _, k := range result {
 			recvCount = recvCount + k.BytesRecv
 			sentCount = sentCount + k.BytesSent
 		}
+		siMu.Lock()
 		si.Up = (sentCount - lastSentCount) / 2
 		si.Down = (recvCount - lastRecvCount) / 2
+		siMu.Unlock()
 		lastSentCount = sentCount
 		lastRecvCount = recvCount
 		lastIO = result
 	})
+	if err != nil {
+		return
+	}
 	c.Start()
 }
 
@@ -142,25 +170,52 @@ func CollectTask() {
 func ServerInfo() *ResponseBody {
 	responseBody := ResponseBody{Msg: "success"}
 	defer TimeCost(time.Now(), &responseBody)
-	cpuPercent, _ := cpu.Percent(0, false)
-	vmInfo, _ := mem.VirtualMemory()
-	smInfo, _ := mem.SwapMemory()
-	diskInfo, _ := disk.Usage("/")
-	loadInfo, _ := load.Avg()
-	tcpCon, _ := net.Connections("tcp")
-	udpCon, _ := net.Connections("udp")
-	netCount := map[string]int{
-		"tcp": len(tcpCon),
-		"udp": len(udpCon),
+	data := map[string]interface{}{
+		"cpu":      []float64{},
+		"speed":    getSpeedInfo(),
+		"netCount": map[string]int{"tcp": 0, "udp": 0},
 	}
-	responseBody.Data = map[string]interface{}{
-		"cpu":      cpuPercent,
-		"memory":   vmInfo,
-		"swap":     smInfo,
-		"disk":     diskInfo,
-		"load":     loadInfo,
-		"speed":    si,
-		"netCount": netCount,
+	var warnings []string
+	if cpuPercent, err := cpu.Percent(0, false); err == nil {
+		data["cpu"] = cpuPercent
+	} else {
+		warnings = append(warnings, "cpu: "+err.Error())
 	}
+	if vmInfo, err := mem.VirtualMemory(); err == nil {
+		data["memory"] = vmInfo
+	} else {
+		warnings = append(warnings, "memory: "+err.Error())
+	}
+	if smInfo, err := mem.SwapMemory(); err == nil {
+		data["swap"] = smInfo
+	} else {
+		warnings = append(warnings, "swap: "+err.Error())
+	}
+	if diskInfo, err := disk.Usage("/"); err == nil {
+		data["disk"] = diskInfo
+	} else {
+		warnings = append(warnings, "disk: "+err.Error())
+	}
+	if loadInfo, err := load.Avg(); err == nil {
+		data["load"] = loadInfo
+	} else {
+		warnings = append(warnings, "load: "+err.Error())
+	}
+	netCount := map[string]int{"tcp": 0, "udp": 0}
+	if tcpCon, err := net.Connections("tcp"); err == nil {
+		netCount["tcp"] = len(tcpCon)
+	} else {
+		warnings = append(warnings, "tcp connections: "+err.Error())
+	}
+	if udpCon, err := net.Connections("udp"); err == nil {
+		netCount["udp"] = len(udpCon)
+	} else {
+		warnings = append(warnings, "udp connections: "+err.Error())
+	}
+	data["netCount"] = netCount
+	if len(warnings) > 0 {
+		data["warnings"] = warnings
+	}
+	responseBody.Data = data
 	return &responseBody
 }

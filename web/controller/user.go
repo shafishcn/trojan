@@ -184,7 +184,11 @@ func ClashSubInfo(c *gin.Context) {
 	mysql := core.GetMysql()
 	user := mysql.GetUserByName(username)
 	if user != nil {
-		pass, _ := base64.StdEncoding.DecodeString(user.Password)
+		pass, err := base64.StdEncoding.DecodeString(user.Password)
+		if err != nil {
+			c.String(500, "subscription is unavailable")
+			return
+		}
 		if password == string(pass) {
 			var wsData, wsHost string
 			userInfo := fmt.Sprintf("upload=%d, download=%d", user.Upload, user.Download)
@@ -192,9 +196,13 @@ func ClashSubInfo(c *gin.Context) {
 				userInfo = fmt.Sprintf("%s, total=%d", userInfo, user.Quota)
 			}
 			if user.ExpiryDate != "" {
-				utc, _ := time.LoadLocation("Asia/Shanghai")
-				t, _ := time.ParseInLocation("2006-01-02", user.ExpiryDate, utc)
-				userInfo = fmt.Sprintf("%s, expire=%d", userInfo, t.Unix())
+				utc, err := time.LoadLocation("Asia/Shanghai")
+				if err == nil {
+					t, err := time.ParseInLocation("2006-01-02", user.ExpiryDate, utc)
+					if err == nil {
+						userInfo = fmt.Sprintf("%s, expire=%d", userInfo, t.Unix())
+					}
+				}
 			}
 			c.Header("content-disposition", fmt.Sprintf("attachment; filename=%s", user.Username))
 			c.Header("subscription-userinfo", userInfo)
