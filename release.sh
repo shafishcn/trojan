@@ -158,6 +158,9 @@ buildAllPlatforms() {
 
     if [ "$DRY_RUN" = false ]; then
         cp install.sh "$RELEASE_DIR/"
+        if [ -f deploy-multi-node.sh ]; then
+            cp deploy-multi-node.sh "$RELEASE_DIR/"
+        fi
     fi
 
     echoSuccess "Built ${#platforms[@]} binaries"

@@ -18,6 +18,15 @@
 
 ## 启动前准备
 
+如果你不想手工创建 `systemd` 和环境变量文件，现在也可以直接使用仓库根目录的：
+
+- [deploy-multi-node.sh](../deploy-multi-node.sh)
+
+它支持：
+
+- `source <(curl -sL https://raw.githubusercontent.com/shafishcn/trojan/master/install.sh) --control ...`
+- `source <(curl -sL https://raw.githubusercontent.com/shafishcn/trojan/master/install.sh) --agent ...`
+
 建议至少准备这些密钥：
 
 - `--jwt-secret`
@@ -48,6 +57,18 @@ root:strong-pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8m
 
 ## 控制中心 systemd
 
+如果你希望一键部署而不是手工落文件，可直接执行：
+
+```bash
+source <(curl -sL https://raw.githubusercontent.com/shafishcn/trojan/master/install.sh) --control \
+  --version v2.15.5 \
+  --dsn 'root:pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8mb4' \
+  --admin-pass 'change-me' \
+  --jwt-secret 'jwt-secret' \
+  --agent-token 'agent-token' \
+  --metrics-token 'metrics-token'
+```
+
 可直接参考：
 
 - [docs/examples/control.service](examples/control.service)
@@ -69,6 +90,20 @@ root:strong-pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8m
 - `systemctl daemon-reload && systemctl enable --now trojan-control`
 
 ## 节点 Agent systemd
+
+Agent 也可以直接一键部署：
+
+```bash
+source <(curl -sL https://raw.githubusercontent.com/shafishcn/trojan/master/install.sh) --agent \
+  --version v2.15.5 \
+  --control-url 'https://control.example.com' \
+  --token 'agent-token' \
+  --node-secret 'node-secret-001' \
+  --node-key 'node-01' \
+  --name 'tokyo-01' \
+  --domain 'tokyo.example.com' \
+  --port 443
+```
 
 可直接参考：
 

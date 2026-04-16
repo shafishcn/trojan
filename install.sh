@@ -9,11 +9,17 @@ remove=0
 
 update=0
 
+deploy_mode=""
+
+deploy_args=()
+
 download_url="https://github.com/shafishcn/trojan/releases/download/"
 
 version_check="https://api.github.com/repos/shafishcn/trojan/releases/latest"
 
 service_url="https://raw.githubusercontent.com/shafishcn/trojan/master/asset/trojan-web.service"
+
+deploy_script_url="https://raw.githubusercontent.com/shafishcn/trojan/master/deploy-multi-node.sh"
 
 [[ -e /var/lib/trojan-manager ]] && update=1
 
@@ -41,11 +47,17 @@ while [[ $# > 0 ]];do
         --remove)
         remove=1
         ;;
+        --control)
+        deploy_mode="control"
+        ;;
+        --agent)
+        deploy_mode="agent"
+        ;;
         -h|--help)
         help=1
         ;;
         *)
-                # unknown option
+        [[ -n ${deploy_mode} ]] && deploy_args+=("$1")
         ;;
     esac
     shift # past argument or value
@@ -53,10 +65,23 @@ done
 #############################
 
 help(){
-    echo "bash $0 [-h|--help] [--remove]"
+    echo "bash $0 [-h|--help] [--remove] [--control ...] [--agent ...]"
     echo "  -h, --help           Show help"
     echo "      --remove         remove trojan"
+    echo "      --control        一键部署多节点控制中心, 后续参数透传给 deploy-multi-node.sh"
+    echo "      --agent          一键部署多节点节点代理, 后续参数透传给 deploy-multi-node.sh"
+    echo ""
+    echo "示例:"
+    echo "  source <(curl -sL https://raw.githubusercontent.com/shafishcn/trojan/master/install.sh) --control --dsn 'root:pass@tcp(127.0.0.1:3306)/trojan_control?parseTime=true&charset=utf8mb4' --admin-pass 'change-me' --jwt-secret 'jwt-secret' --agent-token 'agent-token' --metrics-token 'metrics-token'"
+    echo "  source <(curl -sL https://raw.githubusercontent.com/shafishcn/trojan/master/install.sh) --agent --control-url 'https://control.example.com' --token 'agent-token' --node-secret 'node-secret-001' --node-key 'node-01' --name 'tokyo-01' --domain 'tokyo.example.com' --port 443"
     return 0
+}
+
+runMultiNodeDeploy() {
+    local mode=$1
+    shift
+    colorEcho ${green} "正在执行多节点${mode}一键部署.."
+    bash <(curl -fsSL "${deploy_script_url}") "${mode}" "$@"
 }
 
 removeTrojan() {
@@ -184,6 +209,11 @@ installTrojan(){
 main(){
     [[ ${help} == 1 ]] && help && return
     [[ ${remove} == 1 ]] && removeTrojan && return
+    if [[ -n ${deploy_mode} ]];then
+        checkSys
+        runMultiNodeDeploy "${deploy_mode}" "${deploy_args[@]}"
+        return
+    fi
     [[ $update == 0 ]] && echo "正在安装trojan管理程序.." || echo "正在更新trojan管理程序.."
     checkSys
     [[ $update == 0 ]] && installDependent
