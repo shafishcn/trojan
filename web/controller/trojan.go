@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	ws "github.com/gorilla/websocket"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -68,6 +69,22 @@ func GetLogLevel() *ResponseBody {
 	return &responseBody
 }
 
+func parseCSVInt64(value string, lineNo int, field string) (int64, error) {
+	result, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("CSV第%d行字段%s不是有效整数: %w", lineNo, field, err)
+	}
+	return result, nil
+}
+
+func parseCSVUint64(value string, lineNo int, field string) (uint64, error) {
+	result, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("CSV第%d行字段%s不是有效无符号整数: %w", lineNo, field, err)
+	}
+	return result, nil
+}
+
 // Log 通过ws查看trojan实时日志
 func Log(c *gin.Context) {
 	var (
@@ -110,12 +127,13 @@ func ImportCsv(c *gin.Context) *ResponseBody {
 	}
 	defer file.Close()
 	filename := header.Filename
-	if !strings.Contains(filename, ".csv") {
+	if !strings.EqualFold(filepath.Ext(filename), ".csv") {
 		responseBody.Msg = "仅支持导入csv格式的文件"
 		return &responseBody
 	}
 	reader := csv.NewReader(bufio.NewReader(file))
 	var userList []*core.User
+	lineNo := 0
 	for {
 		line, readErr := reader.Read()
 		if readErr == io.EOF {
@@ -128,10 +146,31 @@ func ImportCsv(c *gin.Context) *ResponseBody {
 			responseBody.Msg = fmt.Sprintf("CSV格式错误: 期望至少9列, 实际%d列", len(line))
 			return &responseBody
 		}
-		quota, _ := strconv.ParseInt(line[4], 10, 64)
-		download, _ := strconv.ParseUint(line[5], 10, 64)
-		upload, _ := strconv.ParseUint(line[6], 10, 64)
-		useDays, _ := strconv.Atoi(line[7])
+		lineNo++
+		quota, err := parseCSVInt64(line[4], lineNo, "quota")
+		if err != nil {
+			responseBody.Msg = err.Error()
+			return &responseBody
+		}
+		download, err := parseCSVUint64(line[5], lineNo, "download")
+		if err != nil {
+			responseBody.Msg = err.Error()
+			return &responseBody
+		}
+		upload, err := parseCSVUint64(line[6], lineNo, "upload")
+		if err != nil {
+			responseBody.Msg = err.Error()
+			return &responseBody
+		}
+		useDays, err := strconv.Atoi(line[7])
+		if err != nil {
+			responseBody.Msg = fmt.Sprintf("CSV第%d行字段useDays不是有效整数: %v", lineNo, err)
+			return &responseBody
+		}
+		if useDays < 0 {
+			responseBody.Msg = fmt.Sprintf("CSV第%d行字段useDays不能为负数", lineNo)
+			return &responseBody
+		}
 		userList = append(userList, &core.User{
 			Username:    line[1],
 			Password:    line[2],
@@ -145,21 +184,35 @@ func ImportCsv(c *gin.Context) *ResponseBody {
 	}
 	mysql := core.GetMysql()
 	db := mysql.GetDB()
-	if _, err = db.Exec("DROP TABLE IF EXISTS users;"); err != nil {
+	if db == nil {
+		responseBody.Msg = "can't connect mysql"
+		return &responseBody
+	}
+	tx, err := db.Begin()
+	if err != nil {
 		responseBody.Msg = err.Error()
 		return &responseBody
 	}
-	if _, err = db.Exec(core.CreateTableSql); err != nil {
+	defer tx.Rollback()
+	if _, err = tx.Exec("DROP TABLE IF EXISTS users;"); err != nil {
+		responseBody.Msg = err.Error()
+		return &responseBody
+	}
+	if _, err = tx.Exec(core.CreateTableSql); err != nil {
 		responseBody.Msg = err.Error()
 		return &responseBody
 	}
 	for _, user := range userList {
-		if _, err = db.Exec(
+		if _, err = tx.Exec(
 			"INSERT INTO users(username, password, passwordShow, quota, download, upload, useDays, expiryDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			user.Username, user.EncryptPass, user.Password, user.Quota, user.Download, user.Upload, user.UseDays, user.ExpiryDate); err != nil {
 			responseBody.Msg = err.Error()
 			return &responseBody
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		responseBody.Msg = err.Error()
+		return &responseBody
 	}
 	return &responseBody
 }
@@ -190,12 +243,18 @@ func ExportCsv(c *gin.Context) *ResponseBody {
 			strconv.FormatUint(uint64(user.UseDays), 10),
 			user.ExpiryDate,
 		}
-		wr.Write(singleUser)
+		if err := wr.Write(singleUser); err != nil {
+			responseBody.Msg = err.Error()
+			return &responseBody
+		}
 	}
 	wr.Flush()
+	if err := wr.Error(); err != nil {
+		responseBody.Msg = err.Error()
+		return &responseBody
+	}
 	c.Writer.Header().Set("Content-type", "application/octet-stream")
 	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment;filename=%s", fmt.Sprintf("%s.csv", mysql.Database)))
 	c.String(200, dataBytes.String())
 	return nil
 }
-

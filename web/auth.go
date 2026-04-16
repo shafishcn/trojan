@@ -162,7 +162,8 @@ func updateAdminPassword(c *gin.Context) {
 // RequestUsername 获取请求接口的用户名
 func RequestUsername(c *gin.Context) string {
 	claims := jwt.ExtractClaims(c)
-	return claims[identityKey].(string)
+	username, _ := claims[identityKey].(string)
+	return username
 }
 
 // Auth 权限router
@@ -171,8 +172,6 @@ func Auth(r *gin.Engine, timeout int) *jwt.GinJWTMiddleware {
 
 	newInstall := gin.H{"code": 201, "message": "No administrator account found inside the database", "data": nil}
 	r.NoRoute(authMiddleware.MiddlewareFunc(), func(c *gin.Context) {
-		claims := jwt.ExtractClaims(c)
-		fmt.Printf("NoRoute claims: %#v\n", claims)
 		c.JSON(404, gin.H{"code": 404, "message": "Page not found"})
 	})
 	r.GET("/auth/check", func(c *gin.Context) {
